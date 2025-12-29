@@ -1,0 +1,49 @@
+# Файлы IDE PyCharm
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Временные файлы
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Логи и базы данных
+*.log
+*.sqlite
+*.db
+
+# Виртуальное окружение
+venv/
+env/
+.venv/
+
+# Файлы сборки и дистрибуции
+build/
+dist/
+*.egg-info/
+*.egg
+*.whl
+
+# Файлы кэша и тестов
+.pytest_cache/
+.cache/
+.coverage
+htmlcov/
+
+# Файлы настроек и среды
+.env
+.venv
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Другие OS-специфичные файлы
+.DS_Store
+Thumbs.db
+
+# Другое
+options.json
+TODO.txt
