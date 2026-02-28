@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}Site Analyzer — Анализатор сайтов{% endblock %}
+{% block nav_active_analyze %}active{% endblock %}
+
+{% block content %}
+<header>
+    <h1 class="page-title">Анализ сайта</h1>
+    <p class="subtitle">Введите URL для комплексного анализа протоколов и безопасности</p>
+</header>
+
+<main>
+    <form id="analyze-form">
+        <div class="search-bar">
+            <input
+                type="text"
+                id="url-input"
+                placeholder="Введите URL сайта, например: example.com"
+                autocomplete="off"
+                spellcheck="false"
+            >
+            <button type="submit" id="analyze-btn">
+                <span class="btn-text">Анализировать</span>
+                <span class="btn-loader hidden">
+                    <svg class="spinner" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="3" stroke-dasharray="31.4 31.4" stroke-linecap="round"/>
+                    </svg>
+                </span>
+            </button>
+        </div>
+    </form>
+
+    <div id="error-box" class="error-box hidden"></div>
+
+    <!-- Кнопка сохранения -->
+    <div id="save-bar" class="save-bar hidden">
+        <input type="text" id="save-note" placeholder="Заметка (необязательно)" class="save-note-input">
+        <button id="save-btn" class="save-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+            </svg>
+            Сохранить
+        </button>
+    </div>
+
+    <div id="results" class="results hidden">
+
+        <!-- Общая информация -->
+        <section class="card" id="general-section">
+            <h2>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+                Общая информация
+            </h2>
+            <div class="info-grid" id="general-info"></div>
+        </section>
+
+        <!-- Оценка безопасности -->
+        <section class="card" id="security-section">
+            <h2>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                Безопасность
+            </h2>
+            <div class="security-overview">
+                <div class="grade-circle" id="security-grade">?</div>
+                <div class="score-bar-container">
+                    <div class="score-bar">
+                        <div class="score-fill" id="score-fill"></div>
+                    </div>
+                    <span class="score-text" id="score-text">0 / 100</span>
+                </div>
+            </div>
+            <ul class="details-list" id="security-details"></ul>
+        </section>
+
+        <!-- SSL/TLS -->
+        <section class="card" id="ssl-section">
+            <h2>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                SSL / TLS
+            </h2>
+            <div class="info-grid" id="ssl-info"></div>
+        </section>
+
+        <!-- DNS -->
+        <section class="card" id="dns-section">
+            <h2>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/></svg>
+                DNS записи
+            </h2>
+            <div class="dns-records" id="dns-info"></div>
+        </section>
+
+        <!-- HTTP заголовки -->
+        <section class="card" id="headers-section">
+            <h2>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                HTTP заголовки
+            </h2>
+            <div class="headers-table" id="headers-info"></div>
+        </section>
+
+        <!-- Технологии -->
+        <section class="card" id="tech-section">
+            <h2>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                Технологии
+            </h2>
+            <div id="tech-info"></div>
+        </section>
+
+        <!-- Производительность -->
+        <section class="card" id="perf-section">
+            <h2>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                Производительность
+            </h2>
+            <div class="info-grid" id="perf-info"></div>
+        </section>
+
+        <!-- WHOIS -->
+        <section class="card" id="whois-section">
+            <h2>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                WHOIS
+            </h2>
+            <div class="info-grid" id="whois-info"></div>
+        </section>
+
+        <!-- Порты -->
+        <section class="card" id="ports-section">
+            <h2>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                Открытые порты
+            </h2>
+            <div id="ports-info"></div>
+        </section>
+
+    </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/app.js"></script>
+{% endblock %}

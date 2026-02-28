@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Сохранённые сайты — Site Analyzer{% endblock %}
+{% block nav_active_saved %}active{% endblock %}
+
+{% block content %}
+<header>
+    <h1 class="page-title">Сохранённые сайты</h1>
+    <p class="subtitle">История анализов с возможностью быстрого просмотра</p>
+</header>
+
+<main>
+    <div id="saved-empty" class="empty-state-block hidden">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+        </svg>
+        <p>Нет сохранённых сайтов</p>
+        <a href="/" class="btn-link">Перейти к анализу</a>
+    </div>
+
+    <div id="saved-list" class="saved-list"></div>
+
+    <!-- Модальное окно для просмотра результатов -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modal-title">Результаты анализа</h2>
+                <button id="modal-close" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/saved.js"></script>
+{% endblock %}
