@@ -1,4 +1,4 @@
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
 from typing import Optional
 
 
@@ -100,6 +100,35 @@ class PortInfo(BaseModel):
     state: str
 
 
+class TracerouteHop(BaseModel):
+    hop: int
+    ip: str
+    hostname: str = ""
+    rtt_ms: list[float] = []
+
+
+class TracerouteInfo(BaseModel):
+    target: str = ""
+    hops: list[TracerouteHop] = []
+    error: str = ""
+
+
+class CookieInfo(BaseModel):
+    name: str
+    secure: bool = False
+    httponly: bool = False
+    samesite: str = ""  # Strict, Lax, None
+    path: str = ""
+    domain: str = ""
+    expires: str = ""
+    issues: list[str] = []  # Проблемы безопасности
+
+
+class CookiesInfo(BaseModel):
+    cookies: list[CookieInfo] = []
+    summary: list[str] = []  # Краткие рекомендации
+
+
 class AnalysisResult(BaseModel):
     url: str
     ip_address: str = ""
@@ -111,4 +140,6 @@ class AnalysisResult(BaseModel):
     performance: Optional[PerformanceInfo] = None
     whois: Optional[WhoisInfo] = None
     ports: list[PortInfo] = []
+    traceroute: Optional[TracerouteInfo] = None
+    cookies: Optional[CookiesInfo] = None
     error: str = ""

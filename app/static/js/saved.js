@@ -50,7 +50,7 @@ function render() {
                         <circle cx="12" cy="12" r="3"/>
                     </svg>
                 </button>
-                <button class="btn-icon reanalyze" title="Повторный анализ" onclick="reanalyze('${escAttr(s.url)}')">
+                <button class="btn-icon reanalyze" title="Повторный анализ" data-url="${encodeURIComponent(s.url)}" onclick="reanalyze(this)">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/>
                     </svg>
@@ -108,6 +108,48 @@ function viewSite(id) {
             ${infoItem('IP-адрес', a.ip_address)}
         </div>
     </div>`;
+
+    // Traceroute — сразу после общей информации, чтобы было видно без прокрутки
+    const tr = a.traceroute;
+    if (tr && tr.error) {
+        html += `
+        <div class="card">
+            <h2>Traceroute</h2>
+            <p class="traceroute-target">Цель: ${escHtml(tr.target || a.ip_address || '—')}</p>
+            <p class="empty-state warning">${escHtml(tr.error)}</p>
+        </div>`;
+    } else if (tr && tr.hops && tr.hops.length > 0) {
+        html += `
+        <div class="card">
+            <h2>Traceroute</h2>
+            <p class="traceroute-target">Цель: ${escHtml(tr.target)}</p>
+            <ol class="traceroute-list">
+                ${tr.hops.map(h => {
+                    const rtt = h.rtt_ms && h.rtt_ms.length > 0
+                        ? h.rtt_ms.map(m => m + ' мс').join(' / ')
+                        : '—';
+                    return `<li>
+                        <span class="hop-num">${h.hop}</span>
+                        <span class="hop-ip mono">${escHtml(h.ip)}</span>
+                        ${h.hostname ? `<span class="hop-host">${escHtml(h.hostname)}</span>` : ''}
+                        <span class="hop-rtt">${rtt}</span>
+                    </li>`;
+                }).join('')}
+            </ol>
+        </div>`;
+    } else if (tr && (!tr.hops || tr.hops.length === 0)) {
+        html += `
+        <div class="card">
+            <h2>Traceroute</h2>
+            <p class="empty-state">Маршрут не определён</p>
+        </div>`;
+    } else {
+        html += `
+        <div class="card">
+            <h2>Traceroute</h2>
+            <p class="empty-state">Данные traceroute отсутствуют (сохранено до добавления функции)</p>
+        </div>`;
+    }
 
     if (a.ssl && a.ssl.issuer) {
         html += `
@@ -184,7 +226,9 @@ async function deleteSite(id) {
     }
 }
 
-function reanalyze(url) {
+function reanalyze(btn) {
+    const url = btn?.dataset?.url ? decodeURIComponent(btn.dataset.url) : '';
+    if (!url) return;
     window.location.href = `/?url=${encodeURIComponent(url)}`;
 }
 

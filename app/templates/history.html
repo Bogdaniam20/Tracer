@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}История сканирований — Site Analyzer{% endblock %}
+{% block nav_active_history %}active{% endblock %}
+
+{% block content %}
+<header>
+    <h1 class="page-title">История сканирований</h1>
+    <p class="subtitle">Последние проанализированные сайты</p>
+</header>
+
+<main>
+    <div id="history-empty" class="empty-state-block hidden">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </svg>
+        <p>История пуста</p>
+        <a href="/" class="btn-link">Выполнить анализ</a>
+    </div>
+
+    <div id="history-list" class="saved-list"></div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/history.js"></script>
+{% endblock %}

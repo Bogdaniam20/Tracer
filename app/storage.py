@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Optional
 
 DATA_FILE = Path(__file__).parent.parent / "data" / "saved_sites.json"
+HISTORY_FILE = Path(__file__).parent.parent / "data" / "scan_history.json"
+HISTORY_MAX_ENTRIES = 100
 
 
 def _ensure_file():
@@ -65,3 +67,33 @@ def update_note(site_id: str, note: str) -> bool:
             _write_all(sites)
             return True
     return False
+
+
+# --- История сканирований ---
+
+def _ensure_history_file():
+    HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not HISTORY_FILE.exists():
+        HISTORY_FILE.write_text("[]", encoding="utf-8")
+
+
+def _read_history() -> list[dict]:
+    _ensure_history_file()
+    return json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
+
+
+def add_scan_to_history(url: str, ip_address: str = "") -> None:
+    history = _read_history()
+    entry = {
+        "url": url,
+        "ip_address": ip_address,
+        "scanned_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    history.insert(0, entry)
+    history = history[:HISTORY_MAX_ENTRIES]
+    _ensure_history_file()
+    HISTORY_FILE.write_text(json.dumps(history, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def get_scan_history(limit: int = 50) -> list[dict]:
+    return _read_history()[:limit]

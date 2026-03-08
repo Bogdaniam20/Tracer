@@ -144,6 +144,8 @@ function renderResults(data) {
     renderPerformance(data.performance);
     renderWhois(data.whois);
     renderPorts(data.ports);
+    renderTraceroute(data.traceroute);
+    renderCookies(data.cookies);
 }
 
 function renderGeneral(data) {
@@ -321,6 +323,76 @@ function renderPorts(ports) {
     `;
 }
 
+function renderTraceroute(tr) {
+    const section = document.getElementById('traceroute-section');
+    section.classList.remove('hidden');
+    if (!tr) {
+        document.getElementById('traceroute-info').innerHTML = '<p class="empty-state warning">Traceroute недоступен</p>';
+        return;
+    }
+
+    const el = document.getElementById('traceroute-info');
+    if (tr.error) {
+        el.innerHTML = `<p class="empty-state warning">${escHtml(tr.error)}</p>`;
+        return;
+    }
+    if (!tr.hops || tr.hops.length === 0) {
+        el.innerHTML = '<p class="empty-state">Маршрут не определён</p>';
+        return;
+    }
+
+    el.innerHTML = `
+        <p class="traceroute-target">Цель: ${escHtml(tr.target)}</p>
+        <ol class="traceroute-list">
+            ${tr.hops.map(h => {
+                const rtt = h.rtt_ms && h.rtt_ms.length > 0
+                    ? h.rtt_ms.map(m => m + ' мс').join(' / ')
+                    : '—';
+                return `<li>
+                    <span class="hop-num">${h.hop}</span>
+                    <span class="hop-ip mono">${escHtml(h.ip)}</span>
+                    ${h.hostname ? `<span class="hop-host">${escHtml(h.hostname)}</span>` : ''}
+                    <span class="hop-rtt">${rtt}</span>
+                </li>`;
+            }).join('')}
+        </ol>
+    `;
+}
+
+function renderCookies(cookies) {
+    const section = document.getElementById('cookies-section');
+    if (!cookies) { section.classList.add('hidden'); return; }
+    section.classList.remove('hidden');
+
+    const el = document.getElementById('cookies-info');
+    if (!cookies.cookies || cookies.cookies.length === 0) {
+        el.innerHTML = '<p class="empty-state">Cookies не установлены</p>';
+        return;
+    }
+
+    const summaryHtml = cookies.summary && cookies.summary.length > 0
+        ? `<ul class="cookies-summary">${cookies.summary.map(s => `<li class="${s.startsWith('✓') ? 'positive' : 'warning'}">${escHtml(s)}</li>`).join('')}</ul>`
+        : '';
+
+    el.innerHTML = `
+        ${summaryHtml}
+        <table class="cookies-table">
+            <thead><tr><th>Cookie</th><th>Secure</th><th>HttpOnly</th><th>SameSite</th><th>Проблемы</th></tr></thead>
+            <tbody>
+                ${cookies.cookies.map(c => `
+                    <tr>
+                        <td class="mono">${escHtml(c.name)}</td>
+                        <td>${c.secure ? '✓' : '✗'}</td>
+                        <td>${c.httponly ? '✓' : '✗'}</td>
+                        <td>${c.samesite || '—'}</td>
+                        <td>${c.issues && c.issues.length > 0 ? c.issues.map(i => escHtml(i)).join(', ') : '—'}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
 function infoItems(pairs) {
     return pairs
         .filter(([, v]) => v !== undefined && v !== null && v !== '')
@@ -358,4 +430,13 @@ function escHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+}
+
+// Обработка ?url= при переходе с кнопки "Повторный анализ" в сохранённых
+const urlParams = new URLSearchParams(window.location.search);
+const urlFromQuery = urlParams.get('url');
+if (urlFromQuery) {
+    urlInput.value = urlFromQuery;
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    history.replaceState({}, '', window.location.pathname);
 }

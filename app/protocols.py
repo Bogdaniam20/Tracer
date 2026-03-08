@@ -1,9 +1,12 @@
+import platform
+import re
 import ssl
 import socket
+import subprocess
 import asyncio
 from datetime import datetime
 
-from app.models import SslInfo, PortInfo
+from app.models import SslInfo, PortInfo, TracerouteInfo, TracerouteHop
 
 
 COMMON_PORTS = {
@@ -91,9 +94,11 @@ async def scan_port(host: str, port: int, timeout: float = 2.0) -> PortInfo | No
             timeout=timeout,
         )
         writer.close()
+        #writer.wait_closed() эта ошибка тормозила бы приложение
         await writer.wait_closed()
         service = COMMON_PORTS.get(port, "unknown")
         return PortInfo(port=port, service=service, state="open")
+    #except (asyncio.TimeoutError): эта ошибка не перехватывает все ошибки
     except (asyncio.TimeoutError, ConnectionRefusedError, OSError):
         return None
 
@@ -105,3 +110,68 @@ async def scan_ports(host: str, ports: list[int] | None = None) -> list[PortInfo
     tasks = [scan_port(host, port) for port in ports]
     results = await asyncio.gather(*tasks)
     return [r for r in results if r is not None]
+
+
+async def traceroute(host: str, max_hops: int = 15, timeout: int = 15) -> TracerouteInfo:
+    """Выполняет traceroute до хоста (tracert на Windows, traceroute на Unix)."""
+    info = TracerouteInfo(target=host)
+    is_windows = platform.system() == "Windows"
+
+    def _run_traceroute():
+        cmd = ["tracert", "-h", str(max_hops), host] if is_windows else ["traceroute", "-m", str(max_hops), host]
+        try:
+            return subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                encoding="cp866" if is_windows else "utf-8",
+                errors="replace",
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return None
+
+    try:
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, _run_traceroute)
+        if result is None:
+            info.error = "Traceroute недоступен или превышено время ожидания"
+            return info
+
+        if result.returncode != 0 and not result.stdout:
+            info.error = result.stderr or "Ошибка выполнения traceroute"
+            return info
+
+        info.hops = _parse_traceroute_output(result.stdout, is_windows)
+    except Exception as e:
+        info.error = str(e)
+
+    return info
+
+
+def _parse_traceroute_output(output: str, is_windows: bool) -> list[TracerouteHop]:
+    hops: list[TracerouteHop] = []
+    ip_pattern = re.compile(r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b")
+
+    for line in output.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        # Пропускаем заголовки
+        if "tracing route" in line.lower() or "over a maximum" in line.lower():
+            continue
+        # Ищем номер хопа в начале строки
+        m = re.match(r"^\s*(\d+)\s+", line)
+        if not m:
+            continue
+        hop_num = int(m.group(1))
+        # Извлекаем IP
+        ip_match = ip_pattern.search(line)
+        if not ip_match:
+            continue
+        ip = ip_match.group(1)
+        # Извлекаем RTT в мс
+        rtts = [float(x) for x in re.findall(r"(?:<)?(\d+)\s*(?:ms|мс)", line, re.IGNORECASE)]
+        hops.append(TracerouteHop(hop=hop_num, ip=ip, hostname="", rtt_ms=rtts))
+
+    return hops

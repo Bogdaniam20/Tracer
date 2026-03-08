@@ -10,14 +10,17 @@ from bs4 import BeautifulSoup
 
 from app.models import (
     AnalysisResult,
+    CookieInfo,
+    CookiesInfo,
     DnsInfo,
     HttpHeadersInfo,
     PerformanceInfo,
     SecurityScore,
     TechInfo,
+    TracerouteInfo,
     WhoisInfo,
 )
-from app.protocols import analyze_ssl, scan_ports
+from app.protocols import analyze_ssl, scan_ports, traceroute
 
 
 def _normalize_url(url: str) -> str:
@@ -54,6 +57,91 @@ async def analyze_dns(hostname: str) -> DnsInfo:
     return info
 
 
+def analyze_cookies(response: httpx.Response) -> CookiesInfo:
+    """Анализирует Set-Cookie заголовки на предмет безопасности."""
+    info = CookiesInfo()
+    summary: set[str] = set()
+
+    # Получаем все Set-Cookie (get_list в httpx, иначе get)
+    set_cookies: list[str] = []
+    if hasattr(response.headers, "get_list"):
+        set_cookies = list(response.headers.get_list("set-cookie"))
+    else:
+        sc = response.headers.get("set-cookie")
+        if sc:
+            set_cookies = [sc]
+
+    for val in set_cookies:
+        val = val.decode("utf-8", errors="replace") if isinstance(val, bytes) else val
+        cookie = _parse_set_cookie(val)
+        if cookie:
+            info.cookies.append(cookie)
+
+    # Рекомендации
+    if not info.cookies:
+        info.summary = ["Cookies не установлены или не переданы в ответе"]
+    else:
+        insecure = [c for c in info.cookies if not c.secure]
+        no_httponly = [c for c in info.cookies if not c.httponly]
+        no_samesite = [c for c in info.cookies if not c.samesite]
+
+        if insecure:
+            info.summary.append(f"⚠ {len(insecure)} cookie без флага Secure (уязвимы при HTTP)")
+        if no_httponly:
+            info.summary.append(f"⚠ {len(no_httponly)} cookie без HttpOnly (доступны из JavaScript)")
+        if no_samesite:
+            info.summary.append(f"⚠ {len(no_samesite)} cookie без SameSite (CSRF риск)")
+        if not insecure and not no_httponly and not no_samesite:
+            info.summary.append("✓ Все cookies настроены безопасно")
+
+    return info
+
+
+def _parse_set_cookie(header_value: str) -> CookieInfo | None:
+    """Парсит значение Set-Cookie и извлекает атрибуты."""
+    parts = [p.strip() for p in header_value.split(";")]
+    if not parts:
+        return None
+    name_val = parts[0].split("=", 1)
+    if len(name_val) < 2:
+        return None
+    name, value = name_val[0].strip(), name_val[1].strip()
+    if not name:
+        return None
+
+    cookie = CookieInfo(name=name)
+    issues: list[str] = []
+
+    for part in parts[1:]:
+        if "=" in part:
+            attr, val = part.split("=", 1)
+            attr, val = attr.strip().lower(), val.strip()
+            if attr == "path":
+                cookie.path = val
+            elif attr == "domain":
+                cookie.domain = val
+            elif attr == "expires":
+                cookie.expires = val
+            elif attr == "samesite":
+                cookie.samesite = val
+        else:
+            attr = part.strip().lower()
+            if attr == "secure":
+                cookie.secure = True
+            elif attr == "httponly":
+                cookie.httponly = True
+
+    if not cookie.secure:
+        issues.append(f"{name}: отсутствует Secure")
+    if not cookie.httponly:
+        issues.append(f"{name}: отсутствует HttpOnly")
+    if not cookie.samesite:
+        issues.append(f"{name}: отсутствует SameSite")
+
+    cookie.issues = issues
+    return cookie
+
+
 async def analyze_headers(response: httpx.Response) -> HttpHeadersInfo:
     h = response.headers
     return HttpHeadersInfo(
@@ -72,7 +160,10 @@ async def analyze_headers(response: httpx.Response) -> HttpHeadersInfo:
 
 
 def calculate_security_score(
-    headers: HttpHeadersInfo, ssl_info=None, url: str = ""
+    headers: HttpHeadersInfo,
+    ssl_info=None,
+    cookies_info=None,
+    url: str = "",
 ) -> SecurityScore:
     score = 0
     details: list[str] = []
@@ -111,6 +202,19 @@ def calculate_security_score(
 
     if headers.server:
         details.append(f"[!] Сервер раскрывает версию: {headers.server}")
+
+    # Проверка cookies
+    if cookies_info and cookies_info.cookies:
+        insecure_cookies = [c for c in cookies_info.cookies if not c.secure]
+        no_httponly = [c for c in cookies_info.cookies if not c.httponly]
+        if not insecure_cookies and not no_httponly:
+            score += 5
+            details.append("[+ 5] Cookies настроены безопасно (Secure, HttpOnly)")
+        else:
+            if insecure_cookies:
+                details.append(f"[  0] {len(insecure_cookies)} cookie без Secure")
+            if no_httponly:
+                details.append(f"[  0] {len(no_httponly)} cookie без HttpOnly")
 
     if score >= 90:
         grade = "A+"
@@ -262,9 +366,10 @@ async def full_analysis(url: str) -> AnalysisResult:
         perf_task = measure_performance(url)
         whois_task = analyze_whois(hostname)
         ports_task = scan_ports(ip)
+        traceroute_task = traceroute(ip, max_hops=12, timeout=12)
 
         results = await asyncio.gather(
-            dns_task, ssl_task, headers_task, perf_task, whois_task, ports_task,
+            dns_task, ssl_task, headers_task, perf_task, whois_task, ports_task, traceroute_task,
             return_exceptions=True,
         )
 
@@ -274,6 +379,13 @@ async def full_analysis(url: str) -> AnalysisResult:
         perf_res = results[3] if not isinstance(results[3], Exception) else PerformanceInfo()
         whois_res = results[4] if not isinstance(results[4], Exception) else WhoisInfo()
         ports_res = results[5] if not isinstance(results[5], Exception) else []
+        if isinstance(results[6], Exception):
+            traceroute_res = TracerouteInfo(
+                target=ip,
+                error=f"Ошибка: {results[6]}",
+            )
+        else:
+            traceroute_res = results[6]
 
         result.dns = dns_res
         result.ssl = ssl_res
@@ -281,11 +393,15 @@ async def full_analysis(url: str) -> AnalysisResult:
         result.performance = perf_res
         result.whois = whois_res
         result.ports = ports_res
+        result.traceroute = traceroute_res
+
+        cookies_res = analyze_cookies(response)
+        result.cookies = cookies_res
 
         tech_res = await detect_technologies(html, headers_res)
         result.technologies = tech_res
 
-        result.security = calculate_security_score(headers_res, ssl_res, url)
+        result.security = calculate_security_score(headers_res, ssl_res, cookies_res, url)
 
     except httpx.RequestError as e:
         result.error = f"Ошибка запроса: {e}"

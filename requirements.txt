@@ -8,3 +8,5 @@ pydantic
 cryptography
 beautifulsoup4
 lxml
+pytest
+pytest-asyncio

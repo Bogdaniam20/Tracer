@@ -34,9 +34,19 @@ async def saved_page(request: Request):
     return templates.TemplateResponse("saved.html", {"request": request})
 
 
+@app.get("/history", response_class=HTMLResponse)
+async def history_page(request: Request):
+    return templates.TemplateResponse("history.html", {"request": request})
+
+
 @app.post("/api/analyze", response_model=AnalysisResult)
 async def analyze(req: AnalyzeRequest):
     result = await full_analysis(req.url)
+    err = getattr(result, "error", None) or (result.get("error") if isinstance(result, dict) else None)
+    if not err:
+        url = getattr(result, "url", None) or (result.get("url") if isinstance(result, dict) else "")
+        ip = getattr(result, "ip_address", None) or (result.get("ip_address") if isinstance(result, dict) else "")
+        storage.add_scan_to_history(url, ip or "")
     return result
 
 
@@ -70,6 +80,13 @@ async def update_note(site_id: str, req: UpdateNoteRequest):
     if not storage.update_note(site_id, req.note):
         raise HTTPException(status_code=404, detail="Сайт не найден")
     return {"status": "updated"}
+
+
+# --- История сканирований API ---
+
+@app.get("/api/history")
+async def get_history(limit: int = 50):
+    return storage.get_scan_history(limit=limit)
 
 
 if __name__ == "__main__":
