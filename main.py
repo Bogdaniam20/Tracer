@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse
@@ -5,6 +7,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.analyzer import full_analysis
+
+BASE_DIR = Path(__file__).resolve().parent
 from app.models import (
     AnalyzeRequest,
     AnalysisResult,
@@ -20,8 +24,8 @@ app = FastAPI(
     version="1.0.0",
 )
 
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
-templates = Jinja2Templates(directory="app/templates")
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "app" / "static")), name="static")
+templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
 
 
 @app.get("/", response_class=HTMLResponse)

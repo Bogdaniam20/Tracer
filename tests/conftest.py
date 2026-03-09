@@ -4,8 +4,6 @@ from pathlib import Path
 
 import pytest
 
-pytest_plugins = ("pytest_asyncio",)
-
 # Добавляем корень проекта в PYTHONPATH
 project_root = Path(__file__).resolve().parent.parent
 if str(project_root) not in sys.path:
