@@ -82,6 +82,33 @@ class PerformanceInfo(BaseModel):
     total_ms: float = 0.0
     content_size_bytes: int = 0
     redirect_count: int = 0
+    http_version: str = ""
+    content_encoding: str = ""
+    cache_control: str = ""
+
+
+class RedirectStep(BaseModel):
+    url: str
+    status_code: int
+
+
+class RedirectInfo(BaseModel):
+    final_url: str = ""
+    redirect_count: int = 0
+    chain: list[RedirectStep] = []
+
+
+class SeoInfo(BaseModel):
+    title: str = ""
+    meta_description: str = ""
+    og_title: str = ""
+    og_description: str = ""
+    og_image: str = ""
+    og_type: str = ""
+    twitter_card: str = ""
+    twitter_title: str = ""
+    viewport: str = ""
+    canonical_url: str = ""
 
 
 class WhoisInfo(BaseModel):
@@ -129,6 +156,30 @@ class CookiesInfo(BaseModel):
     summary: list[str] = []  # Краткие рекомендации
 
 
+class SiteMetaInfo(BaseModel):
+    robots_txt_exists: bool = False
+    robots_txt_preview: str = ""
+    sitemap_exists: bool = False
+    sitemap_url: str = ""
+
+
+class GeoInfo(BaseModel):
+    country: str = ""
+    country_code: str = ""
+    flag_emoji: str = ""
+
+
+class PageVolumeItem(BaseModel):
+    type: str  # html, images, css, js
+    bytes: int = 0
+    percent: float = 0.0
+
+
+class PageVolumeInfo(BaseModel):
+    total_bytes: int = 0
+    items: list[PageVolumeItem] = []
+
+
 class AnalysisResult(BaseModel):
     url: str
     ip_address: str = ""
@@ -142,4 +193,9 @@ class AnalysisResult(BaseModel):
     ports: list[PortInfo] = []
     traceroute: Optional[TracerouteInfo] = None
     cookies: Optional[CookiesInfo] = None
+    redirect_info: Optional[RedirectInfo] = None
+    seo: Optional[SeoInfo] = None
+    site_meta: Optional[SiteMetaInfo] = None
+    geo: Optional[GeoInfo] = None
+    page_volume: Optional[PageVolumeInfo] = None
     error: str = ""

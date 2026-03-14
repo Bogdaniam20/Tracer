@@ -30,6 +30,24 @@
             <div class="modal-body" id="modal-body"></div>
         </div>
     </div>
+
+    <!-- Модальное окно для редактирования заметки -->
+    <div id="note-modal-overlay" class="modal-overlay hidden">
+        <div class="modal note-modal">
+            <div class="modal-header">
+                <h2>Редактировать заметку</h2>
+                <button id="note-modal-close" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="note-modal-url" id="note-modal-url"></p>
+                <textarea id="note-edit-text" rows="4" placeholder="Введите заметку..."></textarea>
+                <div class="note-modal-actions">
+                    <button class="btn btn-secondary" onclick="closeNoteModal()">Отмена</button>
+                    <button class="btn btn-primary" onclick="saveNote()">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </main>
 {% endblock %}
 

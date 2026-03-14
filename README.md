@@ -14,7 +14,6 @@
 - [Структура проекта](#-структура-проекта)
 - [API](#-api)
 - [Тестирование](#-тестирование)
-- [Скрипты](#-скрипты)
 - [Технологии](#-технологии)
 
 ---
@@ -97,6 +96,7 @@ Tracer/
 ├── app/
 │   ├── analyzer.py        # Логика анализа (DNS, SSL, headers, cookies, tech)
 │   ├── models.py          # Pydantic-модели данных
+│   ├── pdf_report.py      # Генерация PDF-отчётов по анализу
 │   ├── protocols.py       # SSL, порты, traceroute
 │   ├── storage.py         # Сохранение и история сканирований
 │   │
@@ -116,12 +116,6 @@ Tracer/
 ├── data/                   # JSON-хранилище (создаётся автоматически)
 │   ├── saved_sites.json
 │   └── scan_history.json
-│
-├── scripts/
-│   └── generate_tech_debt_report.py   # Генерация PDF-отчёта
-│
-├── reports/                # Сгенерированные PDF (создаётся автоматически)
-│   └── technical_debt_report.pdf
 │
 └── tests/
     ├── conftest.py
@@ -195,18 +189,6 @@ python -m pytest tests/test_analyzer.py -v
 # С покрытием (если установлен pytest-cov)
 python -m pytest --cov=app -v
 ```
-
----
-
-## 📄 Скрипты
-
-### Генерация PDF-отчёта о техническом долге
-
-```bash
-python scripts/generate_tech_debt_report.py
-```
-
-Создаёт файл `reports/technical_debt_report.pdf` с графиками и сводкой по техническому долгу.
 
 ---
 

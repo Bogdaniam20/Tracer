@@ -1,21 +1,36 @@
 import asyncio
+import logging
+import os
 import socket
 import time
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 
 import dns.resolver
 import httpx
 import whois
 from bs4 import BeautifulSoup
 
+logger = logging.getLogger(__name__)
+
+# По умолчанию проверять SSL (verify=True). Для диагностики сайтов с кривым сертификатом
+# можно задать VERIFY_SSL=false в окружении.
+VERIFY_SSL = os.environ.get("VERIFY_SSL", "true").lower() in ("1", "true", "yes")
+
 from app.models import (
     AnalysisResult,
     CookieInfo,
     CookiesInfo,
     DnsInfo,
+    GeoInfo,
     HttpHeadersInfo,
+    PageVolumeInfo,
+    PageVolumeItem,
     PerformanceInfo,
+    RedirectInfo,
+    RedirectStep,
+    SeoInfo,
     SecurityScore,
+    SiteMetaInfo,
     TechInfo,
     TracerouteInfo,
     WhoisInfo,
@@ -33,6 +48,19 @@ def _extract_hostname(url: str) -> str:
     return urlparse(url).hostname or ""
 
 
+def _resolve_dns_record(hostname: str, rtype: str) -> list[str]:
+    """Синхронный DNS lookup для одного типа записи."""
+    try:
+        resolver = dns.resolver.Resolver()
+        resolver.timeout = 2
+        resolver.lifetime = 2
+        answers = resolver.resolve(hostname, rtype)
+        return [str(r) for r in answers]
+    except Exception as e:
+        logger.debug("DNS %s для %s: %s", rtype, hostname, e)
+        return []
+
+
 async def analyze_dns(hostname: str) -> DnsInfo:
     info = DnsInfo()
     record_map = {
@@ -44,15 +72,16 @@ async def analyze_dns(hostname: str) -> DnsInfo:
         "CNAME": "cname_records",
     }
 
-    for rtype, field in record_map.items():
-        try:
-            resolver = dns.resolver.Resolver()
-            resolver.timeout = 5
-            resolver.lifetime = 5
-            answers = resolver.resolve(hostname, rtype)
-            setattr(info, field, [str(r) for r in answers])
-        except Exception:
-            pass
+    loop = asyncio.get_event_loop()
+    tasks = [
+        loop.run_in_executor(None, _resolve_dns_record, hostname, rtype)
+        for rtype in record_map
+    ]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for (rtype, field), res in zip(record_map.items(), results):
+        if isinstance(res, list):
+            setattr(info, field, res)
 
     return info
 
@@ -284,23 +313,244 @@ async def detect_technologies(html: str, headers: HttpHeadersInfo) -> TechInfo:
     return TechInfo(technologies=techs, meta_tags=meta, frameworks=frameworks)
 
 
-async def measure_performance(url: str) -> PerformanceInfo:
+def _get_http_version(response: httpx.Response) -> str:
+    """Извлекает версию HTTP из ответа."""
+    ver = getattr(response, "http_version", None)
+    if ver == "HTTP/2":
+        return "HTTP/2"
+    if ver == "HTTP/1.1":
+        return "HTTP/1.1"
+    if ver == "HTTP/1.0":
+        return "HTTP/1.0"
+    return str(ver) if ver else ""
+
+
+def analyze_redirects(response: httpx.Response, final_url: str) -> RedirectInfo:
+    """Анализирует цепочку редиректов."""
+    chain = [
+        RedirectStep(url=str(r.url), status_code=r.status_code)
+        for r in response.history
+    ]
+    return RedirectInfo(
+        final_url=final_url,
+        redirect_count=len(chain),
+        chain=chain,
+    )
+
+
+def analyze_seo(html: str) -> SeoInfo:
+    """Анализирует SEO-метаданные страницы."""
+    info = SeoInfo()
+    soup = BeautifulSoup(html, "lxml")
+
+    title = soup.find("title")
+    if title and title.string:
+        info.title = title.string.strip()[:500]
+
+    meta_desc = soup.find("meta", attrs={"name": "description"})
+    if meta_desc and meta_desc.get("content"):
+        info.meta_description = meta_desc["content"].strip()[:500]
+
+    for prop, attr in [
+        ("og:title", "og_title"),
+        ("og:description", "og_description"),
+        ("og:image", "og_image"),
+        ("og:type", "og_type"),
+    ]:
+        tag = soup.find("meta", attrs={"property": prop})
+        if tag and tag.get("content"):
+            setattr(info, attr, tag["content"].strip()[:500])
+
+    tw_card = soup.find("meta", attrs={"name": "twitter:card"})
+    if tw_card and tw_card.get("content"):
+        info.twitter_card = tw_card["content"].strip()
+    tw_title = soup.find("meta", attrs={"name": "twitter:title"})
+    if tw_title and tw_title.get("content"):
+        info.twitter_title = tw_title["content"].strip()[:500]
+
+    viewport = soup.find("meta", attrs={"name": "viewport"})
+    if viewport and viewport.get("content"):
+        info.viewport = viewport["content"].strip()
+
+    canonical = soup.find("link", attrs={"rel": "canonical"})
+    if canonical and canonical.get("href"):
+        info.canonical_url = canonical["href"].strip()[:500]
+
+    return info
+
+
+async def analyze_site_meta(base_url: str) -> SiteMetaInfo:
+    """Проверяет robots.txt и sitemap.xml (параллельно)."""
+    info = SiteMetaInfo()
+    parsed = urlparse(base_url)
+    base = f"{parsed.scheme}://{parsed.netloc}"
+    robots_url = f"{base}/robots.txt"
+    sitemap_url = f"{base}/sitemap.xml"
+
+    async def fetch_robots():
+        try:
+            async with httpx.AsyncClient(timeout=2.0, verify=VERIFY_SSL) as client:
+                r = await client.get(robots_url)
+                if r.status_code == 200:
+                    content = r.text.strip()
+                    return True, content[:800] + ("..." if len(content) > 800 else "")
+        except Exception as e:
+            logger.debug("robots.txt %s: %s", robots_url, e)
+        return False, ""
+
+    async def fetch_sitemap():
+        try:
+            async with httpx.AsyncClient(timeout=2.0, verify=VERIFY_SSL) as client:
+                s = await client.get(sitemap_url)
+                if s.status_code == 200 and "xml" in (s.headers.get("content-type", "") or ""):
+                    return True, sitemap_url
+        except Exception as e:
+            logger.debug("sitemap %s: %s", sitemap_url, e)
+        return False, ""
+
+    (robots_ok, robots_content), (sitemap_ok, sitemap_url_res) = await asyncio.gather(
+        fetch_robots(), fetch_sitemap()
+    )
+
+    info.robots_txt_exists = robots_ok
+    info.robots_txt_preview = robots_content
+    info.sitemap_exists = sitemap_ok
+    info.sitemap_url = sitemap_url_res if sitemap_ok else ""
+
+    return info
+
+
+def _country_code_to_flag(code: str) -> str:
+    """Преобразует код страны (US, RU) в emoji флаг."""
+    if not code or len(code) != 2:
+        return ""
+    try:
+        return "".join(chr(0x1F1E6 + ord(c) - ord("A")) for c in code.upper())
+    except (ValueError, TypeError):
+        return ""
+
+
+async def analyze_geo(ip: str) -> GeoInfo:
+    """Определяет страну по IP через ip-api.com."""
+    info = GeoInfo()
+    if not ip or ip.startswith("127.") or ip == "::1":
+        return info
+    if ip.startswith("192.168.") or ip.startswith("10.") or ip.startswith("172."):
+        return info  # приватные IP — API не определит
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            r = await client.get(
+                f"http://ip-api.com/json/{ip}",
+                params={"fields": "country,countryCode"},
+            )
+            if r.status_code == 200:
+                data = r.json()
+                if data.get("status") != "fail":
+                    info.country = data.get("country", "")
+                    info.country_code = data.get("countryCode", "")
+                    info.flag_emoji = _country_code_to_flag(info.country_code)
+    except Exception as e:
+        logger.debug("GeoIP для %s: %s", ip, e)
+    return info
+
+
+async def analyze_page_volume(
+    base_url: str, html: str, html_size: int
+) -> PageVolumeInfo:
+    """Анализирует объём страницы по типам контента (HTML, images, CSS, JS)."""
+    info = PageVolumeInfo()
+    soup = BeautifulSoup(html, "lxml")
+
+    images_bytes = 0
+    css_bytes = 0
+    js_bytes = 0
+
+    img_urls = []
+    for img in soup.find_all("img", src=True)[:25]:
+        src = img["src"].strip()
+        if src and not src.startswith("data:"):
+            img_urls.append(urljoin(base_url, src))
+
+    css_urls = []
+    for link in soup.find_all("link", rel=lambda x: x and "stylesheet" in str(x).lower())[:15]:
+        href = link.get("href", "").strip()
+        if href:
+            css_urls.append(urljoin(base_url, href))
+
+    js_urls = []
+    for script in soup.find_all("script", src=True)[:15]:
+        src = script["src"].strip()
+        if src:
+            js_urls.append(urljoin(base_url, src))
+
+    async def fetch_size(client: httpx.AsyncClient, url: str) -> int:
+        try:
+            r = await client.head(url, follow_redirects=True)
+            if r.status_code == 200:
+                cl = r.headers.get("content-length")
+                if cl:
+                    return int(cl)
+            r2 = await client.get(url, follow_redirects=True)
+            return len(r2.content)
+        except Exception as e:
+            logger.debug("fetch_size %s: %s", url, e)
+            return 0
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0, verify=VERIFY_SSL) as client:
+            for url in img_urls:
+                images_bytes += await fetch_size(client, url)
+            for url in css_urls:
+                css_bytes += await fetch_size(client, url)
+            for url in js_urls:
+                js_bytes += await fetch_size(client, url)
+    except Exception as e:
+        logger.debug("analyze_page_volume: %s", e)
+
+    total = html_size + images_bytes + css_bytes + js_bytes
+    info.total_bytes = total
+
+    if total > 0:
+        for label, size in [
+            ("html", html_size),
+            ("images", images_bytes),
+            ("css", css_bytes),
+            ("js", js_bytes),
+        ]:
+            pct = round(100 * size / total, 2)
+            info.items.append(
+                PageVolumeItem(type=label, bytes=size, percent=pct)
+            )
+
+    return info
+
+
+def _extract_performance_from_response(
+    response: httpx.Response,
+    ttfb_ms: float | None = None,
+    dns_lookup_ms: float = 0.0,
+    connect_ms: float = 0.0,
+    total_ms: float | None = None,
+) -> PerformanceInfo:
+    """Извлекает метрики производительности из ответа."""
     info = PerformanceInfo()
     try:
-        start = time.monotonic()
-        async with httpx.AsyncClient(
-            follow_redirects=True, timeout=15, verify=False
-        ) as client:
-            t0 = time.monotonic()
-            response = await client.get(url)
-            total = time.monotonic() - start
-
-            info.total_ms = round(total * 1000, 2)
-            info.ttfb_ms = round((time.monotonic() - t0) * 1000, 2)
-            info.content_size_bytes = len(response.content)
-            info.redirect_count = len(response.history)
-    except Exception:
-        pass
+        info.dns_lookup_ms = round(dns_lookup_ms, 2)
+        info.connect_ms = round(connect_ms, 2)
+        info.ttfb_ms = round(ttfb_ms, 2) if ttfb_ms is not None else 0.0
+        if total_ms is not None:
+            info.total_ms = round(total_ms, 2)
+        else:
+            elapsed = getattr(response, "elapsed", None)
+            if elapsed is not None:
+                info.total_ms = round(elapsed.total_seconds() * 1000, 2)
+        info.content_size_bytes = len(response.content)
+        info.redirect_count = len(response.history)
+        info.http_version = _get_http_version(response)
+        info.content_encoding = response.headers.get("content-encoding", "")
+        info.cache_control = response.headers.get("cache-control", "")
+    except Exception as e:
+        logger.debug("_extract_performance: %s", e)
     return info
 
 
@@ -308,7 +558,10 @@ async def analyze_whois(hostname: str) -> WhoisInfo:
     info = WhoisInfo()
     try:
         loop = asyncio.get_event_loop()
-        w = await loop.run_in_executor(None, whois.whois, hostname)
+        w = await asyncio.wait_for(
+            loop.run_in_executor(None, whois.whois, hostname),
+            timeout=5.0,
+        )
 
         info.domain_name = _whois_str(w.domain_name)
         info.registrar = _whois_str(w.registrar)
@@ -324,8 +577,8 @@ async def analyze_whois(hostname: str) -> WhoisInfo:
         if status:
             info.status = [str(s) for s in status] if isinstance(status, list) else [str(status)]
 
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("WHOIS %s: %s", hostname, e)
     return info
 
 
@@ -337,6 +590,29 @@ def _whois_str(val) -> str:
     return str(val)
 
 
+def _resolve_host_sync(hostname: str) -> str | None:
+    """Разрешает хост в IP (IPv4 или IPv6) через getaddrinfo."""
+    try:
+        # family=0 — любой протокол (IPv4 и IPv6)
+        addrs = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        if addrs:
+            return addrs[0][4][0]
+    except (socket.gaierror, OSError):
+        pass
+    return None
+
+
+def _measure_connect_sync(hostname: str, port: int) -> float:
+    """Измеряет время TCP-подключения в миллисекундах."""
+    try:
+        t0 = time.perf_counter()
+        sock = socket.create_connection((hostname, port), timeout=5)
+        sock.close()
+        return (time.perf_counter() - t0) * 1000
+    except (socket.error, OSError):
+        return 0.0
+
+
 async def full_analysis(url: str) -> AnalysisResult:
     url = _normalize_url(url)
     hostname = _extract_hostname(url)
@@ -346,46 +622,106 @@ async def full_analysis(url: str) -> AnalysisResult:
         result.error = "Невозможно извлечь имя хоста из URL"
         return result
 
-    try:
-        ip = socket.gethostbyname(hostname)
-        result.ip_address = ip
-    except socket.gaierror:
+    loop = asyncio.get_event_loop()
+
+    # Асинхронное разрешение хоста (IPv4 и IPv6) вместо блокирующего gethostbyname
+    t_dns_start = time.perf_counter()
+    ip = await loop.run_in_executor(None, _resolve_host_sync, hostname)
+    dns_lookup_ms = (time.perf_counter() - t_dns_start) * 1000
+
+    if not ip:
         result.error = f"Не удалось разрешить DNS для {hostname}"
         return result
+    result.ip_address = ip
+
+    parsed = urlparse(url)
+    port = 443 if parsed.scheme == "https" else 80
+
+    # Измерение времени TCP-подключения (в executor, т.к. блокирующий вызов)
+    connect_ms = await loop.run_in_executor(None, _measure_connect_sync, hostname, port)
 
     try:
         async with httpx.AsyncClient(
-            follow_redirects=True, timeout=15, verify=False
+            follow_redirects=True, timeout=10.0, verify=VERIFY_SSL
         ) as client:
-            response = await client.get(url)
-            html = response.text
+            # Streaming-запрос для точного измерения TTFB (время до первого байта).
+            # Accept-Encoding: identity — запрашиваем несжатый ответ, чтобы избежать
+            # ошибок декомпрессии (incorrect header check) при streaming.
+            headers = {"Accept-Encoding": "identity"}
+            ttfb_ms: float | None = None
+            total_request_ms: float = 0.0
+            response: httpx.Response
+            html: str
+
+            try:
+                t_request_start = time.perf_counter()
+                async with client.stream("GET", url, headers=headers) as stream_resp:
+                    chunks: list[bytes] = []
+                    async for chunk in stream_resp.aiter_bytes():
+                        if ttfb_ms is None:
+                            ttfb_ms = (time.perf_counter() - t_request_start) * 1000
+                        chunks.append(chunk)
+                    total_request_ms = (time.perf_counter() - t_request_start) * 1000
+                    content = b"".join(chunks)
+                    response = httpx.Response(
+                        status_code=stream_resp.status_code,
+                        headers=stream_resp.headers,
+                        content=content,
+                        request=stream_resp.request,
+                    )
+                    html = content.decode("utf-8", errors="replace")
+            except Exception as e:
+                # Ошибка декомпрессии (incorrect header check) или streaming — fallback на GET
+                if isinstance(e, httpx.RequestError):
+                    raise  # Сетевые ошибки пробрасываем
+                logger.debug("Streaming fallback на GET: %s", e)
+                t_request_start = time.perf_counter()
+                response = await client.get(url)
+                total_request_ms = (time.perf_counter() - t_request_start) * 1000
+                html = response.text
+                ttfb_ms = response.elapsed.total_seconds() * 1000 if response.elapsed else total_request_ms
+
+        perf_res = _extract_performance_from_response(
+            response,
+            ttfb_ms=ttfb_ms,
+            dns_lookup_ms=dns_lookup_ms,
+            connect_ms=connect_ms,
+            total_ms=total_request_ms,
+        )
 
         dns_task = analyze_dns(hostname)
         ssl_task = analyze_ssl(hostname) if url.startswith("https") else asyncio.sleep(0)
         headers_task = analyze_headers(response)
-        perf_task = measure_performance(url)
         whois_task = analyze_whois(hostname)
         ports_task = scan_ports(ip)
-        traceroute_task = traceroute(ip, max_hops=12, timeout=12)
+        traceroute_task = traceroute(ip, max_hops=8, timeout=6)
+        site_meta_task = analyze_site_meta(url)
+        geo_task = analyze_geo(ip)
+        page_volume_task = analyze_page_volume(
+            str(response.url), html, len(response.content)
+        )
 
         results = await asyncio.gather(
-            dns_task, ssl_task, headers_task, perf_task, whois_task, ports_task, traceroute_task,
+            dns_task, ssl_task, headers_task, whois_task, ports_task, traceroute_task,
+            site_meta_task, geo_task, page_volume_task,
             return_exceptions=True,
         )
 
         dns_res = results[0] if not isinstance(results[0], Exception) else DnsInfo()
         ssl_res = results[1] if not isinstance(results[1], Exception) and url.startswith("https") else None
         headers_res = results[2] if not isinstance(results[2], Exception) else HttpHeadersInfo()
-        perf_res = results[3] if not isinstance(results[3], Exception) else PerformanceInfo()
-        whois_res = results[4] if not isinstance(results[4], Exception) else WhoisInfo()
-        ports_res = results[5] if not isinstance(results[5], Exception) else []
-        if isinstance(results[6], Exception):
+        whois_res = results[3] if not isinstance(results[3], Exception) else WhoisInfo()
+        ports_res = results[4] if not isinstance(results[4], Exception) else []
+        if isinstance(results[5], Exception):
             traceroute_res = TracerouteInfo(
                 target=ip,
-                error=f"Ошибка: {results[6]}",
+                error=f"Ошибка: {results[5]}",
             )
         else:
-            traceroute_res = results[6]
+            traceroute_res = results[5]
+        site_meta_res = results[6] if not isinstance(results[6], Exception) else SiteMetaInfo()
+        geo_res = results[7] if not isinstance(results[7], Exception) else GeoInfo()
+        page_volume_res = results[8] if not isinstance(results[8], Exception) else PageVolumeInfo()
 
         result.dns = dns_res
         result.ssl = ssl_res
@@ -397,6 +733,12 @@ async def full_analysis(url: str) -> AnalysisResult:
 
         cookies_res = analyze_cookies(response)
         result.cookies = cookies_res
+
+        result.redirect_info = analyze_redirects(response, str(response.url))
+        result.seo = analyze_seo(html)
+        result.site_meta = site_meta_res
+        result.geo = geo_res
+        result.page_volume = page_volume_res
 
         tech_res = await detect_technologies(html, headers_res)
         result.technologies = tech_res

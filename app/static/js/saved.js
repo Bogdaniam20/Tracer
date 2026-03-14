@@ -50,6 +50,12 @@ function render() {
                         <circle cx="12" cy="12" r="3"/>
                     </svg>
                 </button>
+                <button class="btn-icon edit-note" title="Редактировать заметку" onclick="editNote('${s.id}')">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                </button>
                 <button class="btn-icon reanalyze" title="Повторный анализ" data-url="${encodeURIComponent(s.url)}" onclick="reanalyze(this)">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/>
@@ -75,141 +81,220 @@ function viewSite(id) {
 
     let html = '';
 
-    if (a.security) {
-        const pct = Math.min((a.security.score / a.security.max_score) * 100, 100);
-        html += `
-        <div class="card">
-            <h2>Безопасность</h2>
-            <div class="security-overview">
-                <div class="grade-circle ${gradeClass(a.security.grade)}">${a.security.grade}</div>
-                <div class="score-bar-container">
-                    <div class="score-bar">
-                        <div class="score-fill" style="width:${pct}%;background:${scoreColor(pct)}"></div>
-                    </div>
-                    <span class="score-text">${a.security.score} / ${a.security.max_score}</span>
+    // 1. Общая информация
+    const r = a.redirect_info || {}, s = a.seo || {}, m = a.site_meta || {};
+    const generalItems = [
+        ['URL', a.url],
+        ['IP-адрес', a.ip_address || '—'],
+        ['Финальный URL', r.final_url || a.url || '—'],
+        ['Редиректов', r.redirect_count ?? 0],
+        ['Title', s.title || '—'],
+        ['Meta description', s.meta_description || '—'],
+        ['Viewport', s.viewport || '—'],
+        ['robots.txt', m.robots_txt_exists ? '✓ Найден' : '✗ Не найден'],
+        ['sitemap.xml', m.sitemap_exists ? '✓ Найден' : '✗ Не найден'],
+    ];
+    html += `<div class="card"><h2>Общая информация</h2><div class="info-grid">${infoItemsAll(generalItems)}</div></div>`;
+
+    // 2. Расположение и объём страницы
+    const g = a.geo || {};
+    html += `<div class="card"><h2>Расположение и объём страницы</h2>
+        <div class="geo-block">
+            <span class="geo-flag">${g.flag_emoji || '🌐'}</span>
+            <span class="geo-country">${escHtml(g.country || 'Не определено')}</span>
+        </div>`;
+    const pv = a.page_volume || {};
+    if (pv.items && pv.items.length > 0 && pv.total_bytes > 0) {
+        const typeLabels = { html: 'HTML', images: 'Изображения', css: 'CSS', js: 'JavaScript' };
+        const typeColors = { html: '#22c55e', images: '#3b82f6', css: '#f59e0b', js: '#a855f7' };
+        const rows = pv.items.map(item => {
+            const sizeStr = item.bytes >= 1048576 ? (item.bytes / 1048576).toFixed(2) + ' Мбайт' : (item.bytes / 1024).toFixed(2) + ' КБ';
+            return `<tr><td>${escHtml(typeLabels[item.type] || item.type)}</td><td>${sizeStr}</td><td>${item.percent.toFixed(2)} %</td></tr>`;
+        }).join('');
+        const nonZero = pv.items.filter(x => x.percent > 0);
+        const pieBg = nonZero.length === 0 ? 'var(--border)' : 'conic-gradient(' + nonZero.map((item, i) => {
+            const prev = nonZero.slice(0, i).reduce((acc, x) => acc + x.percent, 0);
+            return `${typeColors[item.type] || '#6b7280'} ${prev}% ${prev + item.percent}%`;
+        }).join(', ') + ')';
+        html += `<div class="volume-block"><h4 class="volume-title">Объём страницы:</h4>
+            <div class="volume-content">
+                <table class="volume-table"><tbody>${rows}</tbody><tfoot><tr><td><strong>всего</strong></td><td><strong>${formatBytes(pv.total_bytes)}</strong></td><td>100 %</td></tr></tfoot></table>
+                <div class="volume-chart-wrap">
+                    <div class="volume-pie" style="background:${pieBg}"></div>
+                    <div class="volume-legend">${pv.items.map(item => `<div class="volume-legend-item"><span class="volume-legend-dot" style="background:${typeColors[item.type] || '#6b7280'}"></span><span>${escHtml(typeLabels[item.type] || item.type)}</span></div>`).join('')}</div>
                 </div>
             </div>
-            <ul class="details-list">
-                ${a.security.details.map(d => {
-                    let cls = 'negative';
-                    if (d.startsWith('[+')) cls = 'positive';
-                    else if (d.startsWith('[!')) cls = 'warning';
-                    return `<li class="${cls}">${escHtml(d)}</li>`;
-                }).join('')}
-            </ul>
         </div>`;
     }
+    html += `</div>`;
 
-    html += `
-    <div class="card">
-        <h2>Общая информация</h2>
-        <div class="info-grid">
-            ${infoItem('URL', a.url)}
-            ${infoItem('IP-адрес', a.ip_address)}
-        </div>
-    </div>`;
+    // 3. Редиректы
+    const redirItems = [['Исходный URL', a.url], ['Финальный URL', r.final_url || a.url || '—'], ['Количество редиректов', r.redirect_count ?? 0]];
+    let redirHtml = `<div class="card"><h2>Редиректы</h2><div class="info-grid">${infoItemsAll(redirItems)}</div>`;
+    if (r.redirect_count > 0 && r.chain && r.chain.length > 0) {
+        redirHtml += `<h4 style="margin-top:1rem;margin-bottom:0.5rem;font-size:0.9rem">Цепочка редиректов</h4><ol class="redirect-chain">${r.chain.map(step => `<li><span class="status-badge">${step.status_code}</span> ${escHtml(step.url)}</li>`).join('')}</ol>`;
+    } else {
+        redirHtml += '<p class="empty-state positive" style="margin-top:0.75rem">Прямой доступ без редиректов</p>';
+    }
+    html += redirHtml + '</div>';
 
-    // Traceroute — сразу после общей информации, чтобы было видно без прокрутки
+    // 4. SEO
+    const seoItems = [['Title', s.title || '—'], ['Meta description', s.meta_description || '—'], ['Open Graph: title', s.og_title || '—'], ['Open Graph: description', s.og_description || '—'], ['Open Graph: image', s.og_image || '—'], ['Viewport', s.viewport || '—'], ['Canonical URL', s.canonical_url || '—']];
+    html += `<div class="card"><h2>SEO и метаданные</h2><div class="info-grid">${infoItemsAll(seoItems)}</div></div>`;
+
+    // 5. robots.txt и sitemap
+    let base = ''; try { if (a.url) base = new URL(a.url).origin; } catch (_) {}
+    const robotsLabel = base ? (m.robots_txt_exists ? `✓ Найден (${base}/robots.txt)` : `✗ Не найден (${base}/robots.txt)`) : (m.robots_txt_exists ? '✓ Найден' : '✗ Не найден');
+    const metaItems = [['robots.txt', robotsLabel], ['sitemap.xml', m.sitemap_exists ? '✓ Найден' : '✗ Не найден'], ['URL sitemap', m.sitemap_url || '—']];
+    let metaHtml = `<div class="card"><h2>robots.txt и sitemap</h2><div class="info-grid">${infoItemsAll(metaItems)}</div>`;
+    if (m.robots_txt_preview) metaHtml += `<h4 style="margin-top:1rem;font-size:0.9rem">Содержимое robots.txt</h4><pre class="robots-preview">${escHtml(m.robots_txt_preview)}</pre>`;
+    html += metaHtml + '</div>';
+
+    // 6. Безопасность
+    if (a.security) {
+        const pct = Math.min((a.security.score / a.security.max_score) * 100, 100);
+        html += `<div class="card"><h2>Безопасность</h2><div class="security-overview">
+            <div class="grade-circle ${gradeClass(a.security.grade)}">${a.security.grade}</div>
+            <div class="score-bar-container"><div class="score-bar"><div class="score-fill" style="width:${pct}%;background:${scoreColor(pct)}"></div></div><span class="score-text">${a.security.score} / ${a.security.max_score}</span></div>
+        </div><ul class="details-list">${a.security.details.map(d => {
+            let cls = 'negative'; if (d.startsWith('[+')) cls = 'positive'; else if (d.startsWith('[!')) cls = 'warning';
+            return `<li class="${cls}">${escHtml(d)}</li>`;
+        }).join('')}</ul></div>`;
+    }
+
+    // 7. SSL/TLS
+    if (a.ssl) {
+        const sslItems = [['Издатель', a.ssl.issuer], ['Субъект', a.ssl.subject], ['Протокол', a.ssl.protocol_version], ['Шифр', a.ssl.cipher_suite], ['Действителен до', a.ssl.not_after], ['Дней до истечения', a.ssl.days_until_expiry || '—']];
+        html += `<div class="card"><h2>SSL / TLS</h2><div class="info-grid">${infoItemsAll(sslItems)}</div></div>`;
+    }
+
+    // 8. DNS
+    const dns = a.dns || {};
+    const dnsGroups = [['A', dns.a_records], ['AAAA', dns.aaaa_records], ['MX', dns.mx_records], ['NS', dns.ns_records], ['TXT', dns.txt_records], ['CNAME', dns.cname_records]].filter(([, recs]) => recs && recs.length > 0);
+    if (dnsGroups.length > 0) {
+        html += `<div class="card"><h2>DNS записи</h2><div class="dns-records">${dnsGroups.map(([type, recs]) => `<div class="dns-group"><h3>${type}</h3><ul>${recs.map(r => `<li>${escHtml(r)}</li>`).join('')}</ul></div>`).join('')}</div></div>`;
+    } else {
+        html += `<div class="card"><h2>DNS записи</h2><p class="empty-state">Записи не найдены</p></div>`;
+    }
+
+    // 9. HTTP заголовки
+    const hdrs = a.headers?.all_headers || {};
+    const hdrRows = Object.entries(hdrs);
+    if (hdrRows.length > 0) {
+        html += `<div class="card"><h2>HTTP заголовки</h2><div class="headers-table"><table><thead><tr><th>Заголовок</th><th>Значение</th></tr></thead><tbody>${hdrRows.map(([k, v]) => `<tr><td>${escHtml(k)}</td><td>${escHtml(v)}</td></tr>`).join('')}</tbody></table></div></div>`;
+    }
+
+    // 10. Технологии
+    const tech = a.technologies || {};
+    const allTechs = [...(tech.frameworks || []), ...(tech.technologies || [])];
+    if (allTechs.length > 0) {
+        html += `<div class="card"><h2>Технологии</h2><div class="tech-tags">${allTechs.map(t => `<span class="tech-tag">${escHtml(t)}</span>`).join('')}</div></div>`;
+    }
+
+    // 11. Производительность
+    const perf = a.performance || {};
+    const perfItems = [
+        ['DNS lookup', perf.dns_lookup_ms ? perf.dns_lookup_ms + ' мс' : '—'],
+        ['TCP connect', perf.connect_ms ? perf.connect_ms + ' мс' : '—'],
+        ['TTFB', perf.ttfb_ms ? perf.ttfb_ms + ' мс' : '—'],
+        ['Общее время', perf.total_ms ? perf.total_ms + ' мс' : '—'],
+        ['Размер контента', perf.content_size_bytes ? formatBytes(perf.content_size_bytes) : '—'],
+        ['Редиректы', perf.redirect_count ?? '—'],
+        ['HTTP версия', perf.http_version || '—'],
+        ['Сжатие', perf.content_encoding || 'нет'],
+        ['Cache-Control', perf.cache_control || '—'],
+    ];
+    html += `<div class="card"><h2>Производительность</h2><div class="info-grid">${infoItemsAll(perfItems)}</div></div>`;
+
+    // 12. WHOIS
+    const w = a.whois || {};
+    const whoisItems = [['Домен', w.domain_name], ['Регистратор', w.registrar], ['Дата создания', w.creation_date], ['Дата истечения', w.expiration_date], ['Страна', w.country || '—']];
+    html += `<div class="card"><h2>WHOIS</h2><div class="info-grid">${infoItemsAll(whoisItems)}</div></div>`;
+
+    // 13. Порты
+    if (a.ports && a.ports.length > 0) {
+        const sorted = [...a.ports].sort((x, y) => x.port - y.port);
+        const useTable = sorted.length > 12;
+        const portsHtml = useTable
+            ? `<div class="ports-scroll"><table class="ports-table"><thead><tr><th>Порт</th><th>Сервис</th></tr></thead><tbody>${sorted.map(p => `<tr><td class="port-num-cell"><span class="port-dot"></span> ${p.port}</td><td>${escHtml(p.service)}</td></tr>`).join('')}</tbody></table></div>`
+            : `<div class="ports-grid">${sorted.map(p => `<div class="port-item"><span class="port-dot"></span><span class="port-number">${p.port}</span><span class="port-service">${escHtml(p.service)}</span></div>`).join('')}</div>`;
+        html += `<div class="card"><h2>Открытые порты</h2>${portsHtml}</div>`;
+    } else {
+        html += `<div class="card"><h2>Открытые порты</h2><p class="empty-state">Открытые порты не обнаружены</p></div>`;
+    }
+
+    // 14. Traceroute
     const tr = a.traceroute;
     if (tr && tr.error) {
-        html += `
-        <div class="card">
-            <h2>Traceroute</h2>
-            <p class="traceroute-target">Цель: ${escHtml(tr.target || a.ip_address || '—')}</p>
-            <p class="empty-state warning">${escHtml(tr.error)}</p>
-        </div>`;
+        html += `<div class="card"><h2>Traceroute</h2><p class="traceroute-target">Цель: ${escHtml(tr.target || a.ip_address || '—')}</p><p class="empty-state warning">${escHtml(tr.error)}</p></div>`;
     } else if (tr && tr.hops && tr.hops.length > 0) {
-        html += `
-        <div class="card">
-            <h2>Traceroute</h2>
-            <p class="traceroute-target">Цель: ${escHtml(tr.target)}</p>
-            <ol class="traceroute-list">
-                ${tr.hops.map(h => {
-                    const rtt = h.rtt_ms && h.rtt_ms.length > 0
-                        ? h.rtt_ms.map(m => m + ' мс').join(' / ')
-                        : '—';
-                    return `<li>
-                        <span class="hop-num">${h.hop}</span>
-                        <span class="hop-ip mono">${escHtml(h.ip)}</span>
-                        ${h.hostname ? `<span class="hop-host">${escHtml(h.hostname)}</span>` : ''}
-                        <span class="hop-rtt">${rtt}</span>
-                    </li>`;
-                }).join('')}
-            </ol>
-        </div>`;
-    } else if (tr && (!tr.hops || tr.hops.length === 0)) {
-        html += `
-        <div class="card">
-            <h2>Traceroute</h2>
-            <p class="empty-state">Маршрут не определён</p>
-        </div>`;
+        html += `<div class="card"><h2>Traceroute</h2><p class="traceroute-target">Цель: ${escHtml(tr.target)}</p><ol class="traceroute-list">${tr.hops.map(h => {
+            const rtt = h.rtt_ms && h.rtt_ms.length > 0 ? h.rtt_ms.map(m => m + ' мс').join(' / ') : '—';
+            return `<li><span class="hop-num">${h.hop}</span><span class="hop-ip mono">${escHtml(h.ip)}</span>${h.hostname ? `<span class="hop-host">${escHtml(h.hostname)}</span>` : ''}<span class="hop-rtt">${rtt}</span></li>`;
+        }).join('')}</ol></div>`;
     } else {
-        html += `
-        <div class="card">
-            <h2>Traceroute</h2>
-            <p class="empty-state">Данные traceroute отсутствуют (сохранено до добавления функции)</p>
-        </div>`;
+        html += `<div class="card"><h2>Traceroute</h2><p class="empty-state">Маршрут не определён</p></div>`;
     }
 
-    if (a.ssl && a.ssl.issuer) {
-        html += `
-        <div class="card">
-            <h2>SSL / TLS</h2>
-            <div class="info-grid">
-                ${infoItem('Издатель', a.ssl.issuer)}
-                ${infoItem('Протокол', a.ssl.protocol_version)}
-                ${infoItem('Шифр', a.ssl.cipher_suite)}
-                ${infoItem('Действителен до', a.ssl.not_after)}
-                ${infoItem('Дней до истечения', a.ssl.days_until_expiry)}
-            </div>
-        </div>`;
-    }
-
-    if (a.performance) {
-        html += `
-        <div class="card">
-            <h2>Производительность</h2>
-            <div class="info-grid">
-                ${infoItem('Общее время', a.performance.total_ms ? a.performance.total_ms + ' мс' : null)}
-                ${infoItem('TTFB', a.performance.ttfb_ms ? a.performance.ttfb_ms + ' мс' : null)}
-                ${infoItem('Размер контента', a.performance.content_size_bytes ? formatBytes(a.performance.content_size_bytes) : null)}
-            </div>
-        </div>`;
-    }
-
-    if (a.whois && a.whois.domain_name) {
-        html += `
-        <div class="card">
-            <h2>WHOIS</h2>
-            <div class="info-grid">
-                ${infoItem('Домен', a.whois.domain_name)}
-                ${infoItem('Регистратор', a.whois.registrar)}
-                ${infoItem('Дата создания', a.whois.creation_date)}
-                ${infoItem('Дата истечения', a.whois.expiration_date)}
-            </div>
-        </div>`;
-    }
-
-    if (a.ports && a.ports.length > 0) {
-        html += `
-        <div class="card">
-            <h2>Открытые порты</h2>
-            <div class="ports-grid">
-                ${a.ports.map(p => `
-                    <div class="port-item">
-                        <span class="port-dot"></span>
-                        <span class="port-number">${p.port}</span>
-                        <span class="port-service">${escHtml(p.service)}</span>
-                    </div>
-                `).join('')}
-            </div>
-        </div>`;
+    // 15. Cookies
+    const cookies = a.cookies || {};
+    if (cookies.cookies && cookies.cookies.length > 0) {
+        const summaryHtml = cookies.summary && cookies.summary.length > 0
+            ? `<ul class="cookies-summary">${cookies.summary.map(s => `<li class="${s.startsWith('✓') ? 'positive' : 'warning'}">${escHtml(s)}</li>`).join('')}</ul>` : '';
+        html += `<div class="card"><h2>Cookies</h2>${summaryHtml}<table class="cookies-table"><thead><tr><th>Cookie</th><th>Secure</th><th>HttpOnly</th><th>SameSite</th></tr></thead><tbody>${cookies.cookies.map(c => `<tr><td class="mono">${escHtml(c.name)}</td><td>${c.secure ? '✓' : '✗'}</td><td>${c.httponly ? '✓' : '✗'}</td><td>${c.samesite || '—'}</td></tr>`).join('')}</tbody></table></div>`;
+    } else {
+        html += `<div class="card"><h2>Cookies</h2><p class="empty-state">Cookies не установлены</p></div>`;
     }
 
     modalBody.innerHTML = html;
     modalOverlay.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
 }
+
+let editingNoteSiteId = null;
+
+function editNote(id) {
+    const site = sites.find(s => s.id === id);
+    if (!site) return;
+    editingNoteSiteId = id;
+    document.getElementById('note-modal-url').textContent = site.url;
+    document.getElementById('note-edit-text').value = site.note || '';
+    document.getElementById('note-modal-overlay').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeNoteModal() {
+    document.getElementById('note-modal-overlay').classList.add('hidden');
+    document.body.style.overflow = '';
+    editingNoteSiteId = null;
+}
+
+async function saveNote() {
+    if (!editingNoteSiteId) return;
+    const textarea = document.getElementById('note-edit-text');
+    const note = textarea.value.trim();
+
+    try {
+        const resp = await fetch(`/api/saved/${editingNoteSiteId}/note`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note }),
+        });
+        if (!resp.ok) throw new Error();
+        const site = sites.find(s => s.id === editingNoteSiteId);
+        if (site) site.note = note;
+        render();
+        closeNoteModal();
+        showToast('Заметка сохранена', 'success');
+    } catch {
+        showToast('Ошибка сохранения заметки', 'error');
+    }
+}
+
+document.getElementById('note-modal-close').addEventListener('click', closeNoteModal);
+document.getElementById('note-modal-overlay').addEventListener('click', (e) => {
+    if (e.target.id === 'note-modal-overlay') closeNoteModal();
+});
 
 async function deleteSite(id) {
     if (!confirm('Удалить сохранённый сайт?')) return;
@@ -264,6 +349,15 @@ function infoItem(label, value) {
             <span class="info-label">${escHtml(label)}</span>
             <span class="info-value mono">${escHtml(String(value))}</span>
         </div>`;
+}
+
+function infoItemsAll(pairs) {
+    return pairs.map(([label, value]) => `
+        <div class="info-item">
+            <span class="info-label">${escHtml(label)}</span>
+            <span class="info-value mono">${escHtml(String(value ?? '—'))}</span>
+        </div>
+    `).join('');
 }
 
 function gradeClass(grade) {

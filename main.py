@@ -2,13 +2,21 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
+
+try:
+    from app.pdf_report import generate_analysis_pdf
+    PDF_AVAILABLE = True
+except ImportError:
+    PDF_AVAILABLE = False
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.analyzer import full_analysis
 
 BASE_DIR = Path(__file__).resolve().parent
+from pydantic import BaseModel
+
 from app.models import (
     AnalyzeRequest,
     AnalysisResult,
@@ -41,6 +49,10 @@ async def saved_page(request: Request):
 @app.get("/history", response_class=HTMLResponse)
 async def history_page(request: Request):
     return templates.TemplateResponse("history.html", {"request": request})
+
+
+class ExportPdfRequest(BaseModel):
+    analysis: dict
 
 
 @app.post("/api/analyze", response_model=AnalysisResult)
@@ -91,6 +103,28 @@ async def update_note(site_id: str, req: UpdateNoteRequest):
 @app.get("/api/history")
 async def get_history(limit: int = 50):
     return storage.get_scan_history(limit=limit)
+
+
+@app.post("/api/export/pdf")
+async def export_pdf(req: ExportPdfRequest):
+    """Генерирует и возвращает PDF-отчёт по результатам анализа."""
+    if not PDF_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="PDF не доступен. Установите: pip install reportlab",
+        )
+    try:
+        pdf_bytes = generate_analysis_pdf(req.analysis)
+        url = req.analysis.get("url", "site")
+        safe_name = "".join(c if c.isalnum() or c in ".-_" else "_" for c in url)[:50]
+        filename = f"analysis_{safe_name}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка генерации PDF: {e}")
 
 
 if __name__ == "__main__":

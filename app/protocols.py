@@ -1,3 +1,4 @@
+import logging
 import platform
 import re
 import ssl
@@ -7,6 +8,8 @@ import asyncio
 from datetime import datetime
 
 from app.models import SslInfo, PortInfo, TracerouteInfo, TracerouteHop
+
+logger = logging.getLogger(__name__)
 
 
 COMMON_PORTS = {
@@ -36,7 +39,7 @@ async def analyze_ssl(hostname: str, port: int = 443) -> SslInfo:
     try:
         ctx = ssl.create_default_context()
         conn = ctx.wrap_socket(socket.socket(socket.AF_INET), server_hostname=hostname)
-        conn.settimeout(5)
+        conn.settimeout(3)
 
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, lambda: conn.connect((hostname, port)))
@@ -81,13 +84,13 @@ async def analyze_ssl(hostname: str, port: int = 443) -> SslInfo:
 
         conn.close()
 
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("SSL для %s:%s: %s", hostname, port, e)
 
     return info
 
 
-async def scan_port(host: str, port: int, timeout: float = 2.0) -> PortInfo | None:
+async def scan_port(host: str, port: int, timeout: float = 1.0) -> PortInfo | None:
     try:
         _, writer = await asyncio.wait_for(
             asyncio.open_connection(host, port),
@@ -112,7 +115,7 @@ async def scan_ports(host: str, ports: list[int] | None = None) -> list[PortInfo
     return [r for r in results if r is not None]
 
 
-async def traceroute(host: str, max_hops: int = 15, timeout: int = 15) -> TracerouteInfo:
+async def traceroute(host: str, max_hops: int = 8, timeout: int = 6) -> TracerouteInfo:
     """Выполняет traceroute до хоста (tracert на Windows, traceroute на Unix)."""
     info = TracerouteInfo(target=host)
     is_windows = platform.system() == "Windows"
