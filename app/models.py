@@ -198,4 +198,5 @@ class AnalysisResult(BaseModel):
     site_meta: Optional[SiteMetaInfo] = None
     geo: Optional[GeoInfo] = None
     page_volume: Optional[PageVolumeInfo] = None
+    screenshot: Optional[str] = None  # base64 PNG
     error: str = ""

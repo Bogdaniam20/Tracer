@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="{{ lang }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -26,21 +26,26 @@
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                     </svg>
-                    Анализ
+                    {{ t.nav_analysis }}
                 </a>
                 <a href="/saved" class="nav-link {% block nav_active_saved %}{% endblock %}">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                     </svg>
-                    Сохранённые
+                    {{ t.nav_saved }}
                     <span class="nav-badge" id="saved-count" style="display:none"></span>
                 </a>
                 <a href="/history" class="nav-link {% block nav_active_history %}{% endblock %}">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
                     </svg>
-                    История
+                    {{ t.nav_history }}
                 </a>
+                <div class="lang-selector">
+                    <span class="lang-label">{{ t.lang_label }}:</span>
+                    <a href="/api/set-lang?lang=ru" class="lang-btn {% if lang == 'ru' %}active{% endif %}" title="Русский">RU</a>
+                    <a href="/api/set-lang?lang=en" class="lang-btn {% if lang == 'en' %}active{% endif %}" title="English">EN</a>
+                </div>
             </div>
         </div>
     </nav>
@@ -49,12 +54,14 @@
         {% block content %}{% endblock %}
 
         <footer>
-            <p>&copy; 2026 Site Analyzer. BSUIR Students.</p>
+            <p>{{ t.footer }}</p>
         </footer>
     </div>
 
+    <script>
+        window.__t = {{ t_js | tojson | safe }};
+    </script>
     {% block scripts %}{% endblock %}
-
     <script>
         fetch('/api/saved').then(r => r.json()).then(data => {
             const badge = document.getElementById('saved-count');

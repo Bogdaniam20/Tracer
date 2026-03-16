@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}Сохранённые сайты — Site Analyzer{% endblock %}
+{% block title %}{{ t.title_saved }}{% endblock %}
 {% block nav_active_saved %}active{% endblock %}
 
 {% block content %}
 <header>
-    <h1 class="page-title">Сохранённые сайты</h1>
-    <p class="subtitle">История анализов</p>
+    <h1 class="page-title">{{ t.page_saved }}</h1>
+    <p class="subtitle">{{ t.subtitle_saved }}</p>
 </header>
 
 <main>
@@ -14,8 +14,8 @@
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
         </svg>
-        <p>Нет сохранённых сайтов</p>
-        <a href="/" class="btn-link">Перейти к анализу</a>
+        <p>{{ t.empty_saved }}</p>
+        <a href="/" class="btn-link">{{ t.btn_to_analyze }}</a>
     </div>
 
     <div id="saved-list" class="saved-list"></div>
@@ -24,7 +24,7 @@
     <div id="modal-overlay" class="modal-overlay hidden">
         <div class="modal">
             <div class="modal-header">
-                <h2 id="modal-title">Результаты анализа</h2>
+                <h2 id="modal-title">{{ t.modal_results }}</h2>
                 <button id="modal-close" class="modal-close">&times;</button>
             </div>
             <div class="modal-body" id="modal-body"></div>
@@ -35,15 +35,15 @@
     <div id="note-modal-overlay" class="modal-overlay hidden">
         <div class="modal note-modal">
             <div class="modal-header">
-                <h2>Редактировать заметку</h2>
+                <h2>{{ t.modal_edit_note }}</h2>
                 <button id="note-modal-close" class="modal-close">&times;</button>
             </div>
             <div class="modal-body">
                 <p class="note-modal-url" id="note-modal-url"></p>
-                <textarea id="note-edit-text" rows="4" placeholder="Введите заметку..."></textarea>
+                <textarea id="note-edit-text" rows="4" placeholder="{{ t.note_placeholder }}"></textarea>
                 <div class="note-modal-actions">
-                    <button class="btn btn-secondary" onclick="closeNoteModal()">Отмена</button>
-                    <button class="btn btn-primary" onclick="saveNote()">Сохранить</button>
+                    <button class="btn btn-secondary" onclick="closeNoteModal()">{{ t.btn_cancel }}</button>
+                    <button class="btn btn-primary" onclick="saveNote()">{{ t.btn_save_note }}</button>
                 </div>
             </div>
         </div>

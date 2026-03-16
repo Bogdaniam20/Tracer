@@ -1,6 +1,8 @@
 import asyncio
+import base64
 import logging
 import os
+import re
 import socket
 import time
 from urllib.parse import urlparse, urljoin
@@ -37,6 +39,48 @@ from app.models import (
 )
 from app.protocols import analyze_ssl, scan_ports, traceroute
 
+try:
+    from playwright.async_api import async_playwright
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+
+
+async def _capture_screenshot(url: str, width: int = 1280, height: int = 800) -> str | None:
+    """Делает скриншот страницы, возвращает base64 PNG или None."""
+    # 1. Пробуем Playwright (если установлен)
+    if PLAYWRIGHT_AVAILABLE:
+        try:
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True)
+                context = await browser.new_context(
+                    viewport={"width": width, "height": height},
+                    ignore_https_errors=True,
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                )
+                page = await context.new_page()
+                await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                await asyncio.sleep(1)
+                screenshot_bytes = await page.screenshot(type="png", full_page=False)
+                await browser.close()
+                return base64.b64encode(screenshot_bytes).decode("ascii")
+        except Exception as e:
+            logger.debug("Скриншот Playwright %s: %s", url, e)
+
+    # 2. Fallback: PageShot API (без ключа)
+    try:
+        async with httpx.AsyncClient(timeout=25.0) as client:
+            resp = await client.get(
+                "https://pageshot.site/v1/screenshot",
+                params={"url": url, "width": 1280, "height": 800, "format": "png"},
+            )
+            if resp.status_code == 200 and len(resp.content) > 1000:
+                return base64.b64encode(resp.content).decode("ascii")
+    except Exception as e:
+        logger.debug("Скриншот PageShot %s: %s", url, e)
+
+    return None
+
 
 def _normalize_url(url: str) -> str:
     if not url.startswith(("http://", "https://")):
@@ -46,6 +90,40 @@ def _normalize_url(url: str) -> str:
 
 def _extract_hostname(url: str) -> str:
     return urlparse(url).hostname or ""
+
+
+def _detect_html_encoding(content: bytes, content_type: str = "") -> str:
+    """Определяет кодировку HTML: из Content-Type, meta charset или эвристика."""
+    # 1. Из заголовка Content-Type
+    if content_type and "charset=" in content_type.lower():
+        for part in content_type.split(";"):
+            part = part.strip().lower()
+            if part.startswith("charset="):
+                enc = part.split("=", 1)[1].strip().strip('"')
+                enc = "cp1251" if enc in ("windows-1251", "cp1251", "win1251") else enc
+                if enc:
+                    return enc
+                break
+    # 2. Из meta charset в HTML (первые 4 КБ)
+    head = content[:4096].decode("utf-8", errors="ignore")
+    if "charset=" in head.lower():
+        m = re.search(r'charset\s*=\s*["\']?([a-zA-Z0-9\-]+)', head, re.I)
+        if m:
+            enc = m.group(1).lower()
+            if enc in ("utf-8", "utf8"):
+                return "utf-8"
+            if enc in ("windows-1251", "cp1251", "win1251"):
+                return "cp1251"
+    # 3. Эвристика: UTF-8 с errors=replace даёт �; если много — пробуем cp1251
+    utf8_decoded = content.decode("utf-8", errors="replace")
+    if "\ufffd" in utf8_decoded:
+        try:
+            cp1251_decoded = content.decode("cp1251", errors="replace")
+            if cp1251_decoded.count("\ufffd") < utf8_decoded.count("\ufffd"):
+                return "cp1251"
+        except (LookupError, ValueError):
+            pass
+    return "utf-8"
 
 
 def _resolve_dns_record(hostname: str, rtype: str) -> list[str]:
@@ -669,7 +747,11 @@ async def full_analysis(url: str) -> AnalysisResult:
                         content=content,
                         request=stream_resp.request,
                     )
-                    html = content.decode("utf-8", errors="replace")
+                    enc = _detect_html_encoding(
+                        content,
+                        stream_resp.headers.get("content-type", ""),
+                    )
+                    html = content.decode(enc, errors="replace")
             except Exception as e:
                 # Ошибка декомпрессии (incorrect header check) или streaming — fallback на GET
                 if isinstance(e, httpx.RequestError):
@@ -689,21 +771,21 @@ async def full_analysis(url: str) -> AnalysisResult:
             total_ms=total_request_ms,
         )
 
+        final_url = str(response.url)
         dns_task = analyze_dns(hostname)
         ssl_task = analyze_ssl(hostname) if url.startswith("https") else asyncio.sleep(0)
         headers_task = analyze_headers(response)
         whois_task = analyze_whois(hostname)
         ports_task = scan_ports(ip)
-        traceroute_task = traceroute(ip, max_hops=8, timeout=6)
+        traceroute_task = traceroute(ip, max_hops=8, timeout=90)
         site_meta_task = analyze_site_meta(url)
         geo_task = analyze_geo(ip)
-        page_volume_task = analyze_page_volume(
-            str(response.url), html, len(response.content)
-        )
+        page_volume_task = analyze_page_volume(final_url, html, len(response.content))
+        screenshot_task = _capture_screenshot(final_url)
 
         results = await asyncio.gather(
             dns_task, ssl_task, headers_task, whois_task, ports_task, traceroute_task,
-            site_meta_task, geo_task, page_volume_task,
+            site_meta_task, geo_task, page_volume_task, screenshot_task,
             return_exceptions=True,
         )
 
@@ -722,6 +804,7 @@ async def full_analysis(url: str) -> AnalysisResult:
         site_meta_res = results[6] if not isinstance(results[6], Exception) else SiteMetaInfo()
         geo_res = results[7] if not isinstance(results[7], Exception) else GeoInfo()
         page_volume_res = results[8] if not isinstance(results[8], Exception) else PageVolumeInfo()
+        screenshot_res = results[9] if not isinstance(results[9], Exception) and results[9] else None
 
         result.dns = dns_res
         result.ssl = ssl_res
@@ -744,6 +827,7 @@ async def full_analysis(url: str) -> AnalysisResult:
         result.technologies = tech_res
 
         result.security = calculate_security_score(headers_res, ssl_res, cookies_res, url)
+        result.screenshot = screenshot_res
 
     except httpx.RequestError as e:
         result.error = f"Ошибка запроса: {e}"

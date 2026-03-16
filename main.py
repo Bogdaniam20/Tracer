@@ -1,8 +1,9 @@
+import json
 from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, Response, RedirectResponse
 
 try:
     from app.pdf_report import generate_analysis_pdf
@@ -25,6 +26,7 @@ from app.models import (
     UpdateNoteRequest,
 )
 from app import storage
+from app.translations import get_translations, SUPPORTED_LANGS, DEFAULT_LANG
 
 app = FastAPI(
     title="Site Analyzer",
@@ -34,21 +36,45 @@ app = FastAPI(
 
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "app" / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
+templates.env.filters["tojson"] = lambda v: json.dumps(v, ensure_ascii=False)
+
+
+def get_lang(request: Request) -> str:
+    """Get language from cookie, default to ru."""
+    lang = request.cookies.get("lang", DEFAULT_LANG)
+    return lang if lang in SUPPORTED_LANGS else DEFAULT_LANG
+
+
+def template_context(request: Request) -> dict:
+    """Common context for all page templates."""
+    lang = get_lang(request)
+    return {"request": request, "t": get_translations(lang), "lang": lang, "t_js": get_translations(lang)}
 
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse("index.html", template_context(request))
 
 
 @app.get("/saved", response_class=HTMLResponse)
 async def saved_page(request: Request):
-    return templates.TemplateResponse("saved.html", {"request": request})
+    return templates.TemplateResponse("saved.html", template_context(request))
 
 
 @app.get("/history", response_class=HTMLResponse)
 async def history_page(request: Request):
-    return templates.TemplateResponse("history.html", {"request": request})
+    return templates.TemplateResponse("history.html", template_context(request))
+
+
+@app.get("/api/set-lang")
+async def set_lang(lang: str, request: Request):
+    """Set language cookie and redirect back."""
+    if lang not in SUPPORTED_LANGS:
+        lang = DEFAULT_LANG
+    referer = request.headers.get("referer", "/")
+    response = RedirectResponse(url=referer, status_code=302)
+    response.set_cookie(key="lang", value=lang, max_age=365 * 24 * 3600, path="/")
+    return response
 
 
 class ExportPdfRequest(BaseModel):

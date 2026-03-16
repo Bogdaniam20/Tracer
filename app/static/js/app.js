@@ -1,3 +1,5 @@
+const t = (key) => (window.__t && window.__t[key]) || key;
+
 const form = document.getElementById('analyze-form');
 const urlInput = document.getElementById('url-input');
 const analyzeBtn = document.getElementById('analyze-btn');
@@ -49,7 +51,7 @@ form.addEventListener('submit', async (e) => {
             resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     } catch (err) {
-        showError(err.message || 'Не удалось выполнить анализ');
+        showError(err.message || t('err_analysis'));
     } finally {
         setLoading(false);
     }
@@ -72,9 +74,9 @@ pdfBtn?.addEventListener('click', async () => {
         a.download = `analysis_${(lastAnalysis.url || 'site').replace(/[^a-zA-Z0-9.-]/g, '_').slice(0, 40)}.pdf`;
         a.click();
         URL.revokeObjectURL(url);
-        showToast('PDF загружен', 'success');
+        showToast(t('toast_pdf_ok'), 'success');
     } catch {
-        showToast('Не удалось скачать PDF', 'error');
+        showToast(t('toast_pdf_err'), 'error');
     } finally {
         pdfBtn.disabled = false;
     }
@@ -103,13 +105,13 @@ saveBtn.addEventListener('click', async () => {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="20 6 9 17 4 12"/>
             </svg>
-            Сохранено
+            ${t('btn_saved')}
         `;
-        showToast('Сайт сохранён', 'success');
+        showToast(t('toast_saved_ok'), 'success');
         updateBadge();
     } catch {
         saveBtn.disabled = false;
-        showToast('Не удалось сохранить', 'error');
+        showToast(t('toast_saved_err'), 'error');
     }
 });
 
@@ -120,7 +122,7 @@ function resetSaveBtn() {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
         </svg>
-        Сохранить
+        ${t('btn_save')}
     `;
     saveNote.value = '';
 }
@@ -163,6 +165,7 @@ function hideError() {
 
 function renderResults(data) {
     renderGeneral(data);
+    renderScreenshot(data.screenshot);
     renderGeoVolume(data.geo, data.page_volume);
     renderRedirects(data.redirect_info, data.url);
     renderSeo(data.seo);
@@ -179,23 +182,38 @@ function renderResults(data) {
     renderCookies(data.cookies);
 }
 
+function renderScreenshot(screenshotB64) {
+    const section = document.getElementById('screenshot-section');
+    const el = document.getElementById('screenshot-info');
+    if (!section || !el) return;
+    section.classList.remove('hidden');
+    if (screenshotB64) {
+        el.innerHTML = `<a href="data:image/png;base64,${screenshotB64}" target="_blank" rel="noopener" class="screenshot-link">
+            <img src="data:image/png;base64,${screenshotB64}" alt="${t('section_screenshot')}" class="screenshot-img">
+        </a>`;
+    } else {
+        el.innerHTML = `<p class="empty-state">${t('screenshot_unavailable')}</p>`;
+    }
+}
+
 function renderGeneral(data) {
     const el = document.getElementById('general-info');
     if (!el) return;
+    const found = t('label_found'), notFound = t('label_not_found');
     const items = [
-        ['URL', data.url],
-        ['IP-адрес', data.ip_address || '—'],
+        [t('label_url'), data.url],
+        [t('label_ip'), data.ip_address || '—'],
     ];
     const r = data.redirect_info || {};
     const s = data.seo || {};
     const m = data.site_meta || {};
-    items.push(['Финальный URL', r.final_url || data.url || '—']);
-    items.push(['Редиректов', r.redirect_count ?? 0]);
-    items.push(['Title', s.title || '—']);
-    items.push(['Meta description', s.meta_description || '—']);
-    items.push(['Viewport', s.viewport || '—']);
-    items.push(['robots.txt', m.robots_txt_exists ? '✓ Найден' : '✗ Не найден']);
-    items.push(['sitemap.xml', m.sitemap_exists ? '✓ Найден' : '✗ Не найден']);
+    items.push([t('label_final_url'), r.final_url || data.url || '—']);
+    items.push([t('label_redirect_count'), r.redirect_count ?? 0]);
+    items.push([t('label_title'), s.title || '—']);
+    items.push([t('label_meta_desc'), s.meta_description || '—']);
+    items.push([t('label_viewport'), s.viewport || '—']);
+    items.push(['robots.txt', m.robots_txt_exists ? `✓ ${found}` : `✗ ${notFound}`]);
+    items.push(['sitemap.xml', m.sitemap_exists ? `✓ ${found}` : `✗ ${notFound}`]);
     el.innerHTML = infoItemsAll(items);
 }
 
@@ -209,17 +227,17 @@ function renderGeoVolume(geo, pageVolume) {
     const g = geo || {};
     html += `<div class="geo-block">
         <span class="geo-flag">${g.flag_emoji || '🌐'}</span>
-        <span class="geo-country">${escHtml(g.country || 'Не определено')}</span>
+        <span class="geo-country">${escHtml(g.country || t('empty_undefined'))}</span>
     </div>`;
 
     const pv = pageVolume || {};
     if (pv.items && pv.items.length > 0 && pv.total_bytes > 0) {
-        const typeLabels = { html: 'HTML', images: 'Изображения', css: 'CSS', js: 'JavaScript' };
+        const typeLabels = { html: t('label_html'), images: t('label_images'), css: t('label_css'), js: t('label_js') };
         const typeColors = { html: '#22c55e', images: '#3b82f6', css: '#f59e0b', js: '#a855f7' };
         const rows = pv.items.map((item, i) => {
             const sizeMb = (item.bytes / 1048576).toFixed(2);
             const sizeKb = (item.bytes / 1024).toFixed(2);
-            const sizeStr = item.bytes >= 1048576 ? `${sizeMb} Мбайт` : `${sizeKb} КБ`;
+            const sizeStr = item.bytes >= 1048576 ? `${sizeMb} ${t('format_mb')}` : `${sizeKb} ${t('format_kb')}`;
             return `<tr>
                 <td>${escHtml(typeLabels[item.type] || item.type)}</td>
                 <td>${sizeStr}</td>
@@ -228,11 +246,11 @@ function renderGeoVolume(geo, pageVolume) {
         }).join('');
         html += `
             <div class="volume-block">
-                <h4 class="volume-title">Объём страницы:</h4>
+                <h4 class="volume-title">${t('label_volume')}</h4>
                 <div class="volume-content">
                     <table class="volume-table">
                         <tbody>${rows}</tbody>
-                        <tfoot><tr><td><strong>всего</strong></td><td><strong>${formatBytes(pv.total_bytes)}</strong></td><td>100 %</td></tr></tfoot>
+                        <tfoot><tr><td><strong>${t('label_total')}</strong></td><td><strong>${formatBytes(pv.total_bytes)}</strong></td><td>100 %</td></tr></tfoot>
                     </table>
                     <div class="volume-chart-wrap">
                         <div class="volume-pie" style="background: ${(() => {
@@ -256,7 +274,7 @@ function renderGeoVolume(geo, pageVolume) {
                 </div>
             </div>`;
     } else if (!html) {
-        html = '<p class="empty-state">Данные недоступны</p>';
+        html = `<p class="empty-state">${t('empty_data')}</p>`;
     }
     el.innerHTML = html;
 }
@@ -271,18 +289,18 @@ function renderRedirects(redir, originalUrl) {
     const finalUrl = r.final_url || originalUrl || '—';
     const count = r.redirect_count ?? 0;
     const items = [
-        ['Исходный URL', originalUrl || '—'],
-        ['Финальный URL', finalUrl],
-        ['Количество редиректов', count],
+        [t('label_original_url'), originalUrl || '—'],
+        [t('label_final_url'), finalUrl],
+        [t('label_redirect_count'), count],
     ];
     let html = `<div class="info-grid">${infoItemsAll(items)}</div>`;
 
     if (count > 0 && r.chain && r.chain.length > 0) {
-        html += `<h4 style="margin-top:1rem;margin-bottom:0.5rem;font-size:0.9rem">Цепочка редиректов</h4><ol class="redirect-chain">${r.chain.map(s => `
+        html += `<h4 style="margin-top:1rem;margin-bottom:0.5rem;font-size:0.9rem">${t('label_redirect_chain')}</h4><ol class="redirect-chain">${r.chain.map(s => `
             <li><span class="status-badge">${s.status_code}</span> ${escHtml(s.url)}</li>
         `).join('')}</ol>`;
     } else if (count === 0) {
-        html += '<p class="empty-state positive" style="margin-top:0.75rem">Прямой доступ без редиректов</p>';
+        html += `<p class="empty-state positive" style="margin-top:0.75rem">${t('empty_direct')}</p>`;
     }
     el.innerHTML = html;
 }
@@ -295,8 +313,8 @@ function renderSeo(seo) {
 
     const s = seo || {};
     const items = [
-        ['Title', s.title || '—'],
-        ['Meta description', s.meta_description || '—'],
+        [t('label_title'), s.title || '—'],
+        [t('label_meta_desc'), s.meta_description || '—'],
         ['Open Graph: title', s.og_title || '—'],
         ['Open Graph: description', s.og_description || '—'],
         ['Open Graph: image', s.og_image || '—'],
@@ -320,17 +338,18 @@ function renderSiteMeta(meta, baseUrl) {
     try {
         if (baseUrl) base = new URL(baseUrl).origin;
     } catch (_) {}
+    const found = t('label_found'), notFound = t('label_not_found');
     const robotsLabel = base
-        ? (m.robots_txt_exists ? `✓ Найден (${base}/robots.txt)` : `✗ Не найден (${base}/robots.txt)`)
-        : (m.robots_txt_exists ? '✓ Найден' : '✗ Не найден');
+        ? (m.robots_txt_exists ? `✓ ${found} (${base}/robots.txt)` : `✗ ${notFound} (${base}/robots.txt)`)
+        : (m.robots_txt_exists ? `✓ ${found}` : `✗ ${notFound}`);
     const items = [
         ['robots.txt', robotsLabel],
-        ['sitemap.xml', m.sitemap_exists ? '✓ Найден' : '✗ Не найден'],
+        ['sitemap.xml', m.sitemap_exists ? `✓ ${found}` : `✗ ${notFound}`],
         ['URL sitemap', m.sitemap_url || '—'],
     ];
     let html = `<div class="info-grid">${infoItemsAll(items)}</div>`;
     if (m.robots_txt_preview) {
-        html += `<h4 style="margin-top:1rem;margin-bottom:0.5rem;font-size:0.9rem">Содержимое robots.txt</h4><pre class="robots-preview">${escHtml(m.robots_txt_preview)}</pre>`;
+        html += `<h4 style="margin-top:1rem;margin-bottom:0.5rem;font-size:0.9rem">${t('label_robots_content')}</h4><pre class="robots-preview">${escHtml(m.robots_txt_preview)}</pre>`;
     } else if (m.robots_txt_exists) {
         html += '<p class="empty-state" style="margin-top:0.75rem">Файл найден, но содержимое пустое</p>';
     } else {
@@ -370,15 +389,15 @@ function renderSsl(ssl) {
     section.classList.remove('hidden');
 
     document.getElementById('ssl-info').innerHTML = infoItems([
-        ['Издатель', ssl.issuer],
-        ['Субъект', ssl.subject],
-        ['Протокол', ssl.protocol_version],
-        ['Шифр', ssl.cipher_suite],
-        ['Размер ключа', ssl.key_size ? ssl.key_size + ' бит' : '—'],
-        ['Действителен с', ssl.not_before],
-        ['Действителен до', ssl.not_after],
-        ['Дней до истечения', ssl.days_until_expiry || '—'],
-        ['SAN', ssl.san?.join(', ') || '—'],
+        [t('label_issuer'), ssl.issuer],
+        [t('label_subject'), ssl.subject],
+        [t('label_protocol'), ssl.protocol_version],
+        [t('label_cipher'), ssl.cipher_suite],
+        [t('label_key_size'), ssl.key_size ? ssl.key_size + t('empty_bits') : '—'],
+        [t('label_valid_from'), ssl.not_before],
+        [t('label_valid_to'), ssl.not_after],
+        [t('label_days_expiry'), ssl.days_until_expiry || '—'],
+        [t('label_san'), ssl.san?.join(', ') || '—'],
     ]);
 }
 
@@ -398,7 +417,7 @@ function renderDns(dns) {
     ].filter(([, recs]) => recs && recs.length > 0);
 
     if (groups.length === 0) {
-        el.innerHTML = '<p class="empty-state">Записи не найдены</p>';
+        el.innerHTML = `<p class="empty-state">${t('empty_records')}</p>`;
         return;
     }
 
@@ -419,13 +438,13 @@ function renderHeaders(hdrs) {
     const rows = Object.entries(all);
 
     if (rows.length === 0) {
-        document.getElementById('headers-info').innerHTML = '<p class="empty-state">Заголовки недоступны</p>';
+        document.getElementById('headers-info').innerHTML = `<p class="empty-state">${t('empty_headers')}</p>`;
         return;
     }
 
     document.getElementById('headers-info').innerHTML = `
         <table>
-            <thead><tr><th>Заголовок</th><th>Значение</th></tr></thead>
+            <thead><tr><th>${t('label_header')}</th><th>${t('label_value')}</th></tr></thead>
             <tbody>
                 ${rows.map(([k, v]) => `<tr><td>${escHtml(k)}</td><td>${escHtml(v)}</td></tr>`).join('')}
             </tbody>
@@ -445,7 +464,7 @@ function renderTech(tech) {
     ];
 
     if (allTechs.length === 0) {
-        el.innerHTML = '<p class="empty-state">Технологии не определены</p>';
+        el.innerHTML = `<p class="empty-state">${t('empty_tech')}</p>`;
         return;
     }
 
@@ -461,15 +480,16 @@ function renderPerformance(perf) {
     if (!perf) { section.classList.add('hidden'); return; }
     section.classList.remove('hidden');
 
+    const ms = t('label_ms');
     document.getElementById('perf-info').innerHTML = infoItems([
-        ['DNS lookup', perf.dns_lookup_ms ? perf.dns_lookup_ms + ' мс' : '—'],
-        ['TCP connect', perf.connect_ms ? perf.connect_ms + ' мс' : '—'],
-        ['TTFB', perf.ttfb_ms ? perf.ttfb_ms + ' мс' : '—'],
-        ['Общее время', perf.total_ms ? perf.total_ms + ' мс' : '—'],
+        ['DNS lookup', perf.dns_lookup_ms ? perf.dns_lookup_ms + ' ' + ms : '—'],
+        ['TCP connect', perf.connect_ms ? perf.connect_ms + ' ' + ms : '—'],
+        ['TTFB', perf.ttfb_ms ? perf.ttfb_ms + ' ' + ms : '—'],
+        ['Общее время', perf.total_ms ? perf.total_ms + ' ' + ms : '—'],
         ['Размер контента', perf.content_size_bytes ? formatBytes(perf.content_size_bytes) : '—'],
         ['Редиректы', perf.redirect_count ?? '—'],
         ['HTTP версия', perf.http_version || '—'],
-        ['Сжатие', perf.content_encoding || 'нет'],
+        [t('label_compression'), perf.content_encoding || t('label_no')],
         ['Cache-Control', perf.cache_control || '—'],
     ]);
 }
@@ -480,12 +500,12 @@ function renderWhois(w) {
     section.classList.remove('hidden');
 
     document.getElementById('whois-info').innerHTML = infoItems([
-        ['Домен', w.domain_name],
-        ['Регистратор', w.registrar],
-        ['Дата создания', w.creation_date],
-        ['Дата истечения', w.expiration_date],
-        ['NS серверы', w.name_servers?.join(', ') || '—'],
-        ['Страна', w.country || '—'],
+        [t('label_domain'), w.domain_name],
+        [t('label_registrar'), w.registrar],
+        [t('label_created'), w.creation_date],
+        [t('label_expires'), w.expiration_date],
+        [t('label_ns'), w.name_servers?.join(', ') || '—'],
+        [t('label_country'), w.country || '—'],
     ]);
 }
 
@@ -496,7 +516,7 @@ function renderPorts(ports) {
     section.classList.remove('hidden');
 
     if (!ports || ports.length === 0) {
-        el.innerHTML = '<p class="empty-state">Открытые порты не обнаружены</p>';
+        el.innerHTML = `<p class="empty-state">${t('empty_ports')}</p>`;
         return;
     }
 
@@ -507,7 +527,7 @@ function renderPorts(ports) {
         el.innerHTML = `
             <div class="ports-scroll">
                 <table class="ports-table">
-                    <thead><tr><th>Порт</th><th>Сервис</th></tr></thead>
+                    <thead><tr><th>${t('label_port')}</th><th>${t('label_service')}</th></tr></thead>
                     <tbody>
                         ${sorted.map(p => `
                             <tr>
@@ -538,7 +558,7 @@ function renderTraceroute(tr) {
     const section = document.getElementById('traceroute-section');
     section.classList.remove('hidden');
     if (!tr) {
-        document.getElementById('traceroute-info').innerHTML = '<p class="empty-state warning">Traceroute недоступен</p>';
+        document.getElementById('traceroute-info').innerHTML = `<p class="empty-state warning">${t('empty_traceroute')}</p>`;
         return;
     }
 
@@ -548,21 +568,23 @@ function renderTraceroute(tr) {
         return;
     }
     if (!tr.hops || tr.hops.length === 0) {
-        el.innerHTML = '<p class="empty-state">Маршрут не определён</p>';
+        el.innerHTML = `<p class="empty-state">${t('empty_route')}</p>`;
         return;
     }
 
     el.innerHTML = `
-        <p class="traceroute-target">Цель: ${escHtml(tr.target)}</p>
+        <p class="traceroute-target">${t('label_target')} ${escHtml(tr.target)}</p>
         <ol class="traceroute-list">
             ${tr.hops.map(h => {
                 const rtt = h.rtt_ms && h.rtt_ms.length > 0
-                    ? h.rtt_ms.map(m => m + ' мс').join(' / ')
+                    ? h.rtt_ms.map(m => m + ' ' + t('label_ms')).join(' / ')
                     : '—';
+                const hostPart = h.hostname
+                    ? `<span class="hop-host">${escHtml(h.hostname)}</span> <span class="hop-ip mono">${escHtml(h.ip)}</span>`
+                    : `<span class="hop-ip mono">${escHtml(h.ip)}</span>`;
                 return `<li>
                     <span class="hop-num">${h.hop}</span>
-                    <span class="hop-ip mono">${escHtml(h.ip)}</span>
-                    ${h.hostname ? `<span class="hop-host">${escHtml(h.hostname)}</span>` : ''}
+                    ${hostPart}
                     <span class="hop-rtt">${rtt}</span>
                 </li>`;
             }).join('')}
@@ -577,7 +599,7 @@ function renderCookies(cookies) {
 
     const el = document.getElementById('cookies-info');
     if (!cookies.cookies || cookies.cookies.length === 0) {
-        el.innerHTML = '<p class="empty-state">Cookies не установлены</p>';
+        el.innerHTML = `<p class="empty-state">${t('empty_cookies')}</p>`;
         return;
     }
 
@@ -588,7 +610,7 @@ function renderCookies(cookies) {
     el.innerHTML = `
         ${summaryHtml}
         <table class="cookies-table">
-            <thead><tr><th>Cookie</th><th>Secure</th><th>HttpOnly</th><th>SameSite</th><th>Проблемы</th></tr></thead>
+            <thead><tr><th>${t('label_cookie')}</th><th>${t('label_secure')}</th><th>${t('label_httponly')}</th><th>${t('label_samesite')}</th><th>${t('label_issues')}</th></tr></thead>
             <tbody>
                 ${cookies.cookies.map(c => `
                     <tr>
@@ -642,9 +664,9 @@ function scoreColor(pct) {
 }
 
 function formatBytes(bytes) {
-    if (bytes < 1024) return bytes + ' Б';
-    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' КБ';
-    return (bytes / 1048576).toFixed(2) + ' МБ';
+    if (bytes < 1024) return bytes + ' ' + t('format_b');
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' ' + t('format_kb');
+    return (bytes / 1048576).toFixed(2) + ' ' + t('format_mb');
 }
 
 function escHtml(str) {

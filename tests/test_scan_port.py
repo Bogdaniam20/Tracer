@@ -93,13 +93,18 @@ async def test_traceroute_parses_windows_output():
 Tracing route to 8.8.8.8 over a maximum of 30 hops
 
   1    <1 ms    <1 ms    <1 ms  192.168.1.1
-  2    10 ms    12 ms    11 ms  10.0.0.1
+  2    10 ms    12 ms    11 ms  router.isp.net [10.0.0.1]
   3    25 ms    24 ms    26 ms  93.184.216.34
 """
-    with patch("app.protocols.subprocess.run") as mock_run:
+    with patch("app.protocols.subprocess.run") as mock_run, patch(
+        "app.protocols._resolve_hop_hostnames", new=AsyncMock()
+    ):
         mock_run.return_value = MagicMock(returncode=0, stdout=fake_output, stderr="")
         result = await traceroute("8.8.8.8", max_hops=5, timeout=5)
     assert result.error == ""
     assert len(result.hops) >= 2
     assert result.hops[0].ip == "192.168.1.1"
+    assert result.hops[0].hostname == ""
+    assert result.hops[1].ip == "10.0.0.1"
+    assert result.hops[1].hostname == "router.isp.net"
     assert result.hops[0].hop == 1

@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}История сканирований — Site Analyzer{% endblock %}
+{% block title %}{{ t.title_history }}{% endblock %}
 {% block nav_active_history %}active{% endblock %}
 
 {% block content %}
 <header>
-    <h1 class="page-title">История сканирований</h1>
-    <p class="subtitle">Последние проанализированные сайты</p>
+    <h1 class="page-title">{{ t.page_history }}</h1>
+    <p class="subtitle">{{ t.subtitle_history }}</p>
 </header>
 
 <main>
@@ -14,8 +14,8 @@
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
         </svg>
-        <p>История пуста</p>
-        <a href="/" class="btn-link">Выполнить анализ</a>
+        <p>{{ t.empty_history }}</p>
+        <a href="/" class="btn-link">{{ t.btn_analyze_now }}</a>
     </div>
 
     <div id="history-list" class="saved-list"></div>

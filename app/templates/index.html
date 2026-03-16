@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Site Analyzer — Анализатор сайтов{% endblock %}
+{% block title %}{{ t.title_analyzer }}{% endblock %}
 {% block nav_active_analyze %}active{% endblock %}
 
 {% block content %}
@@ -11,9 +11,9 @@
     </div>
 
     <header class="hero-header">
-        <div class="hero-badge">DNS · SSL · HTTP · Security</div>
-        <h1 class="hero-title">Проверь сайт<br><span class="hero-accent">за секунды</span></h1>
-        <p class="hero-subtitle">Полный аудит: сертификаты, заголовки, порты, traceroute и многое другое</p>
+        <div class="hero-badge">{{ t.hero_badge }}</div>
+        <h1 class="hero-title">{{ t.hero_title }}<br><span class="hero-accent">{{ t.hero_accent }}</span></h1>
+        <p class="hero-subtitle">{{ t.hero_subtitle }}</p>
     </header>
 
     <form id="analyze-form" class="hero-form">
@@ -26,12 +26,12 @@
             <input
                 type="text"
                 id="url-input"
-                placeholder="example.com или https://example.com"
+                placeholder="{{ t.input_placeholder }}"
                 autocomplete="off"
                 spellcheck="false"
             >
             <button type="submit" id="analyze-btn" class="hero-submit">
-                <span class="btn-text">Анализировать</span>
+                <span class="btn-text">{{ t.btn_analyze }}</span>
                 <span class="btn-loader hidden">
                     <svg class="spinner" viewBox="0 0 24 24">
                         <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="3" stroke-dasharray="31.4 31.4" stroke-linecap="round"/>
@@ -46,43 +46,43 @@
             <span class="hero-feature-icon">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
             </span>
-            <span>Сохранённые</span>
+            <span>{{ t.nav_saved }}</span>
         </a>
         <a href="/history" class="hero-feature-card">
             <span class="hero-feature-icon">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             </span>
-            <span>История</span>
+            <span>{{ t.nav_history }}</span>
         </a>
     </div>
 
     <div class="hero-checks">
-        <span class="hero-check-item">SSL</span>
-        <span class="hero-check-item">DNS</span>
-        <span class="hero-check-item">Заголовки</span>
-        <span class="hero-check-item">Порты</span>
-        <span class="hero-check-item">Traceroute</span>
+        <span class="hero-check-item" data-tooltip="{{ t.tooltip_ssl }}">SSL</span>
+        <span class="hero-check-item" data-tooltip="{{ t.tooltip_dns }}">DNS</span>
+        <span class="hero-check-item" data-tooltip="{{ t.tooltip_headers }}">{{ t.check_headers }}</span>
+        <span class="hero-check-item" data-tooltip="{{ t.tooltip_ports }}">{{ t.check_ports }}</span>
+        <span class="hero-check-item" data-tooltip="{{ t.tooltip_traceroute }}">Traceroute</span>
     </div>
 
     <div id="error-box" class="error-box hidden"></div>
 
     <!-- Кнопки сохранения и экспорта -->
     <div id="save-bar" class="save-bar hidden">
-        <input type="text" id="save-note" placeholder="Заметка (необязательно)" class="save-note-input">
+        <input type="text" id="save-note" placeholder="{{ t.save_note_placeholder }}" class="save-note-input">
         <button id="save-btn" class="save-btn">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
             </svg>
-            Сохранить
+            {{ t.btn_save }}
         </button>
-        <button id="pdf-btn" class="pdf-btn" title="Скачать отчёт в PDF">
+        <button id="pdf-btn" class="pdf-btn" title="{{ t.btn_download_pdf_title }}">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                 <polyline points="14 2 14 8 20 8"/>
                 <path d="M12 18v-6"/>
                 <path d="M9 15h6"/>
             </svg>
-            Скачать PDF
+            {{ t.btn_download_pdf }}
         </button>
     </div>
 
@@ -92,16 +92,25 @@
         <section class="card" id="general-section">
             <h2>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-                Общая информация
+                {{ t.section_general }}
             </h2>
             <div class="info-grid" id="general-info"></div>
+        </section>
+
+        <!-- Превью страницы (скриншот) -->
+        <section class="card" id="screenshot-section">
+            <h2>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                {{ t.section_screenshot }}
+            </h2>
+            <div id="screenshot-info" class="screenshot-preview"></div>
         </section>
 
         <!-- Расположение и объём страницы -->
         <section class="card" id="geo-volume-section">
             <h2>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                Расположение и объём страницы
+                {{ t.section_geo_volume }}
             </h2>
             <div id="geo-volume-info"></div>
         </section>
@@ -110,7 +119,7 @@
         <section class="card" id="redirect-section">
             <h2>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                Редиректы
+                {{ t.section_redirects }}
             </h2>
             <div id="redirect-info"></div>
         </section>
@@ -119,7 +128,7 @@
         <section class="card" id="seo-section">
             <h2>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                SEO и метаданные
+                {{ t.section_seo }}
             </h2>
             <div class="info-grid" id="seo-info"></div>
         </section>
@@ -128,7 +137,7 @@
         <section class="card" id="site-meta-section">
             <h2>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                robots.txt и sitemap
+                {{ t.section_site_meta }}
             </h2>
             <div id="site-meta-info"></div>
         </section>
@@ -137,7 +146,7 @@
         <section class="card" id="security-section">
             <h2>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                Безопасность
+                {{ t.section_security }}
             </h2>
             <div class="security-overview">
                 <div class="grade-circle" id="security-grade">?</div>
@@ -155,7 +164,7 @@
         <section class="card" id="ssl-section">
             <h2>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                SSL / TLS
+                {{ t.section_ssl }}
             </h2>
             <div class="info-grid" id="ssl-info"></div>
         </section>
@@ -164,7 +173,7 @@
         <section class="card" id="dns-section">
             <h2>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/></svg>
-                DNS записи
+                {{ t.section_dns }}
             </h2>
             <div class="dns-records" id="dns-info"></div>
         </section>
@@ -173,7 +182,7 @@
         <section class="card" id="headers-section">
             <h2>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                HTTP заголовки
+                {{ t.section_headers }}
             </h2>
             <div class="headers-table" id="headers-info"></div>
         </section>
@@ -182,7 +191,7 @@
         <section class="card" id="tech-section">
             <h2>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                Технологии
+                {{ t.section_tech }}
             </h2>
             <div id="tech-info"></div>
         </section>
@@ -191,7 +200,7 @@
         <section class="card" id="perf-section">
             <h2>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                Производительность
+                {{ t.section_perf }}
             </h2>
             <div class="info-grid" id="perf-info"></div>
         </section>
@@ -209,7 +218,7 @@
         <section class="card" id="ports-section">
             <h2>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
-                Открытые порты
+                {{ t.section_ports }}
             </h2>
             <div id="ports-info"></div>
         </section>
@@ -227,7 +236,7 @@
         <section class="card" id="cookies-section">
             <h2>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12a2 2 0 1 0 4 0 2 2 0 1 0-4 0"/><path d="M14 8a1.5 1.5 0 1 0 3 0 1.5 1.5 0 1 0-3 0"/><path d="M7 16a1.5 1.5 0 1 0 3 0 1.5 1.5 0 1 0-3 0"/></svg>
-                Cookies
+                {{ t.section_cookies }}
             </h2>
             <div id="cookies-info"></div>
         </section>

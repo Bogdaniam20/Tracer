@@ -109,6 +109,48 @@ body {
     line-height: 1.4;
 }
 
+.lang-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-left: 0.5rem;
+    padding-left: 0.75rem;
+    border-left: 1px solid var(--border);
+}
+
+.lang-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.lang-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    text-decoration: none;
+    transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+
+.lang-btn:hover {
+    color: var(--text);
+    background: var(--bg-input);
+    border-color: rgba(220, 38, 38, 0.4);
+}
+
+.lang-btn.active {
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-color: rgba(220, 38, 38, 0.5);
+}
+
 /* ===== Container ===== */
 .container {
     max-width: 960px;
@@ -339,6 +381,7 @@ body {
 }
 
 .hero-check-item {
+    position: relative;
     padding: 0.35rem 0.75rem;
     background: rgba(28, 24, 24, 0.5);
     border: 1px solid rgba(63, 45, 45, 0.8);
@@ -346,6 +389,57 @@ body {
     color: var(--text-muted);
     font-size: 0.8rem;
     font-weight: 500;
+    cursor: help;
+}
+
+.hero-check-item::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%) scale(0.95);
+    min-width: 200px;
+    max-width: 280px;
+    padding: 0.6rem 0.85rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.8rem;
+    font-weight: 400;
+    line-height: 1.4;
+    text-align: center;
+    box-shadow: var(--shadow);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, transform 0.2s, visibility 0.2s;
+    pointer-events: none;
+    z-index: 50;
+}
+
+.hero-check-item::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: var(--border);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+    pointer-events: none;
+    z-index: 51;
+}
+
+.hero-check-item:hover::after,
+.hero-check-item:hover::before {
+    opacity: 1;
+    visibility: visible;
+}
+
+.hero-check-item:hover::after {
+    transform: translateX(-50%) scale(1);
 }
 
 .hero-layout .error-box {
@@ -591,6 +685,30 @@ header {
 .card h2 svg {
     color: #f87171;
     flex-shrink: 0;
+}
+
+.screenshot-preview {
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+}
+
+.screenshot-link {
+    display: block;
+    line-height: 0;
+}
+
+.screenshot-img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.screenshot-img:hover {
+    opacity: 0.95;
 }
 
 .info-grid {
