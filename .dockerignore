@@ -24,6 +24,3 @@ data
 # IDE
 .idea
 .vscode
-
-# Fly.io
-.fly

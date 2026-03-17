@@ -1,4 +1,4 @@
-# Site Analyzer - Fly.io
+# Site Analyzer - Render
 # Официальный образ Playwright с Python и Chromium
 FROM mcr.microsoft.com/playwright/python:v1.49.0-jammy
 

@@ -28,9 +28,6 @@ data/
 *.swp
 *.swo
 
-# Fly.io
-.fly/
-
 # Прочее
 *.log
 .DS_Store

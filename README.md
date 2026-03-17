@@ -89,20 +89,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 ## 🚀 Деплой
 
-### Fly.io
-
-```bash
-# 1. Установить flyctl: https://fly.io/docs/hands-on/install-flyctl/
-# 2. Войти: flyctl auth login
-
-git clone https://github.com/Bogdaniam20/Tracer.git
-cd Tracer
-
-fly launch --no-deploy   # создать приложение (указать уникальное имя)
-fly deploy               # задеплоить
-```
-
-### Render.com (альтернатива)
+### Render.com
 
 1. Подключите репозиторий на [render.com](https://render.com)
 2. New → Web Service → выберите репозиторий
@@ -119,8 +106,7 @@ fly deploy               # задеплоить
 Tracer/
 ├── main.py                 # Точка входа FastAPI
 ├── requirements.txt        # Зависимости Python
-├── Dockerfile              # Образ для Fly.io / Render
-├── fly.toml                # Конфигурация Fly.io
+├── Dockerfile              # Образ для Render
 ├── render.yaml             # Blueprint для Render.com
 ├── pytest.ini              # Конфигурация pytest
 ├── README.md
