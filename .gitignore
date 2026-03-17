@@ -1,5 +1,37 @@
+# Python
 .venv/
+venv/
 __pycache__/
 *.pyc
-.env
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+
+# Тесты и покрытие
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Данные (создаются при запуске)
 data/
+
+# Окружение
+.env
+.env.local
+*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Fly.io
+.fly/
+
+# Прочее
+*.log
+.DS_Store
+Thumbs.db

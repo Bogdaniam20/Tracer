@@ -1,0 +1,29 @@
+# Git
+.git
+.gitignore
+
+# Python
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.pytest_cache
+.coverage
+htmlcov
+
+# Локальные данные (не копировать в образ)
+data
+.env
+.env.*
+
+# Документация (опционально)
+*.md
+
+# IDE
+.idea
+.vscode
+
+# Fly.io
+.fly

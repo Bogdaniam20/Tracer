@@ -1,0 +1,11 @@
+# Render.com Blueprint — Site Analyzer
+# https://render.com/docs/blueprint-spec
+# Подключите репозиторий → New Web Service → Render обнаружит этот файл
+
+services:
+  - type: web
+    runtime: docker
+    name: site-analyzer
+    region: frankfurt
+    plan: free
+    healthCheckPath: /
