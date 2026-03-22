@@ -84,6 +84,14 @@
             </svg>
             {{ t.btn_download_pdf }}
         </button>
+        <button id="json-btn" class="json-btn" title="{{ t.btn_download_json_title }}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <polyline points="16 13 12 17 8 13"/>
+            </svg>
+            {{ t.btn_download_json }}
+        </button>
     </div>
 
     <div id="results" class="results results-below-hero hidden">
@@ -158,6 +166,7 @@
                 </div>
             </div>
             <ul class="details-list" id="security-details"></ul>
+            <div id="security-recommendations"></div>
         </section>
 
         <!-- SSL/TLS -->
@@ -232,6 +241,15 @@
             <div id="traceroute-info"></div>
         </section>
 
+        <!-- Email Security -->
+        <section class="card" id="email-security-section">
+            <h2>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                {{ t.section_email_security }}
+            </h2>
+            <div id="email-security-info"></div>
+        </section>
+
         <!-- Cookies -->
         <section class="card" id="cookies-section">
             <h2>
@@ -246,5 +264,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/app.js?v=2"></script>
+<script src="/static/js/app.js?v=3"></script>
 {% endblock %}

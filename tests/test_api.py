@@ -12,10 +12,12 @@ def client():
 
 
 def test_health_returns_ok(client):
-    """GET /api/health возвращает status ok."""
+    """GET /api/health возвращает status ok и информацию о Redis."""
     r = client.get("/api/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok"}
+    data = r.json()
+    assert data["status"] == "ok"
+    assert "redis" in data
 
 
 def test_get_saved_returns_list(client, temp_storage_file):

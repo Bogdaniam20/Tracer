@@ -144,6 +144,30 @@ TRANSLATIONS = {
         "subtitle_history": "Последние проанализированные сайты",
         "empty_history": "История пуста",
         "btn_analyze_now": "Выполнить анализ",
+        "btn_clear_history": "Очистить историю",
+        "confirm_clear_history": "Очистить всю историю сканирований?",
+        "toast_history_cleared": "История очищена",
+        "toast_history_clear_err": "Ошибка очистки истории",
+        "toast_entry_deleted": "Запись удалена",
+        "toast_entry_delete_err": "Ошибка удаления записи",
+        "confirm_delete_entry": "Удалить эту запись из истории?",
+        # Email security
+        "section_email_security": "Email-безопасность",
+        "label_spf": "SPF",
+        "label_dmarc": "DMARC",
+        "label_record": "Запись",
+        "label_status": "Статус",
+        "label_configured": "Настроено",
+        "label_not_configured": "Не настроено",
+        "empty_email_security": "Данные о email-безопасности недоступны",
+        # Security recommendations
+        "section_recommendations": "Рекомендации по исправлению",
+        "empty_recommendations": "Все проверки пройдены — рекомендаций нет",
+        # JSON export
+        "btn_download_json": "Скачать JSON",
+        "btn_download_json_title": "Скачать отчёт в JSON",
+        "toast_json_ok": "JSON загружен",
+        "toast_json_err": "Не удалось скачать JSON",
     },
     "en": {
         # Nav & common
@@ -287,6 +311,30 @@ TRANSLATIONS = {
         "subtitle_history": "Recently analyzed sites",
         "empty_history": "History is empty",
         "btn_analyze_now": "Run analysis",
+        "btn_clear_history": "Clear history",
+        "confirm_clear_history": "Clear all scan history?",
+        "toast_history_cleared": "History cleared",
+        "toast_history_clear_err": "Failed to clear history",
+        "toast_entry_deleted": "Entry deleted",
+        "toast_entry_delete_err": "Failed to delete entry",
+        "confirm_delete_entry": "Delete this history entry?",
+        # Email security
+        "section_email_security": "Email security",
+        "label_spf": "SPF",
+        "label_dmarc": "DMARC",
+        "label_record": "Record",
+        "label_status": "Status",
+        "label_configured": "Configured",
+        "label_not_configured": "Not configured",
+        "empty_email_security": "Email security data unavailable",
+        # Security recommendations
+        "section_recommendations": "Fix recommendations",
+        "empty_recommendations": "All checks passed — no recommendations",
+        # JSON export
+        "btn_download_json": "Download JSON",
+        "btn_download_json_title": "Download report as JSON",
+        "toast_json_ok": "JSON downloaded",
+        "toast_json_err": "Failed to download JSON",
     },
 }
 

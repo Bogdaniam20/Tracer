@@ -11,6 +11,7 @@ const saveBar = document.getElementById('save-bar');
 const saveBtn = document.getElementById('save-btn');
 const saveNote = document.getElementById('save-note');
 const pdfBtn = document.getElementById('pdf-btn');
+const jsonBtn = document.getElementById('json-btn');
 
 let lastAnalysis = null;
 let lastUrl = '';
@@ -79,6 +80,31 @@ pdfBtn?.addEventListener('click', async () => {
         showToast(t('toast_pdf_err'), 'error');
     } finally {
         pdfBtn.disabled = false;
+    }
+});
+
+jsonBtn?.addEventListener('click', async () => {
+    if (!lastAnalysis) return;
+    jsonBtn.disabled = true;
+    try {
+        const resp = await fetch('/api/export/json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ analysis: lastAnalysis }),
+        });
+        if (!resp.ok) throw new Error('JSON export failed');
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `analysis_${(lastAnalysis.url || 'site').replace(/[^a-zA-Z0-9.-]/g, '_').slice(0, 40)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(t('toast_json_ok'), 'success');
+    } catch {
+        showToast(t('toast_json_err'), 'error');
+    } finally {
+        jsonBtn.disabled = false;
     }
 });
 
@@ -179,6 +205,7 @@ function renderResults(data) {
     renderWhois(data.whois);
     renderPorts(data.ports);
     renderTraceroute(data.traceroute);
+    renderEmailSecurity(data.email_security);
     renderCookies(data.cookies);
 }
 
@@ -381,6 +408,19 @@ function renderSecurity(sec) {
         else if (d.startsWith('[!')) cls = 'warning';
         return `<li class="${cls}">${escHtml(d)}</li>`;
     }).join('');
+
+    const recsContainer = document.getElementById('security-recommendations');
+    if (recsContainer) {
+        if (sec.recommendations && sec.recommendations.length > 0) {
+            recsContainer.innerHTML = `
+                <h4 class="recs-title">${t('section_recommendations')}</h4>
+                <ul class="recs-list">${sec.recommendations.map(r =>
+                    `<li>${escHtml(r)}</li>`
+                ).join('')}</ul>`;
+        } else {
+            recsContainer.innerHTML = `<p class="empty-state positive">${t('empty_recommendations')}</p>`;
+        }
+    }
 }
 
 function renderSsl(ssl) {
@@ -590,6 +630,56 @@ function renderTraceroute(tr) {
             }).join('')}
         </ol>
     `;
+}
+
+function renderEmailSecurity(emailSec) {
+    const section = document.getElementById('email-security-section');
+    const el = document.getElementById('email-security-info');
+    if (!section || !el) return;
+
+    if (!emailSec) {
+        section.classList.add('hidden');
+        return;
+    }
+    section.classList.remove('hidden');
+
+    const scoreClass = emailSec.score === 'good' ? 'positive'
+        : emailSec.score === 'warning' ? 'warning' : 'negative';
+
+    let html = '';
+
+    if (emailSec.summary && emailSec.summary.length > 0) {
+        html += `<div class="email-sec-summary ${scoreClass}">
+            ${emailSec.summary.map(s => `<span class="email-sec-badge">${escHtml(s)}</span>`).join('')}
+        </div>`;
+    }
+
+    const records = [
+        { label: t('label_spf'), rec: emailSec.spf },
+        { label: t('label_dmarc'), rec: emailSec.dmarc },
+    ];
+
+    html += '<div class="email-sec-records">';
+    for (const { label, rec } of records) {
+        if (!rec) continue;
+        const statusCls = rec.found ? 'found' : 'missing';
+        const statusText = rec.found ? t('label_configured') : t('label_not_configured');
+        html += `<div class="email-sec-record ${statusCls}">
+            <div class="email-sec-record-header">
+                <span class="email-sec-type">${escHtml(label)}</span>
+                <span class="email-sec-status ${statusCls}">${statusText}</span>
+            </div>`;
+        if (rec.raw) {
+            html += `<pre class="email-sec-raw">${escHtml(rec.raw)}</pre>`;
+        }
+        if (rec.details && rec.details.length > 0) {
+            html += `<ul class="email-sec-details">${rec.details.map(d => `<li>${escHtml(d)}</li>`).join('')}</ul>`;
+        }
+        html += '</div>';
+    }
+    html += '</div>';
+
+    el.innerHTML = html;
 }
 
 function renderCookies(cookies) {

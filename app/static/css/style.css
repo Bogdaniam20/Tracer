@@ -548,9 +548,10 @@ header {
 
 /* ===== Save bar ===== */
 .save-bar {
-    max-width: 640px;
+    max-width: 780px;
     margin: 1.5rem auto 0;
     display: flex;
+    flex-wrap: wrap;
     gap: 0.75rem;
     align-items: center;
     padding: 1rem 1.25rem;
@@ -1530,6 +1531,241 @@ header {
     width: 10px;
     height: 10px;
     border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* ===== JSON export button ===== */
+.json-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.6rem 1.25rem;
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 8px;
+    color: #60a5fa;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    white-space: nowrap;
+}
+
+.json-btn:hover {
+    background: rgba(59, 130, 246, 0.22);
+    border-color: rgba(59, 130, 246, 0.5);
+}
+
+.json-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ===== Security Recommendations ===== */
+.recs-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-top: 1.25rem;
+    margin-bottom: 0.6rem;
+    color: var(--warning);
+}
+
+.recs-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.recs-list li {
+    font-size: 0.85rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    border-radius: 6px;
+    color: var(--text);
+    line-height: 1.4;
+}
+
+.recs-list li::before {
+    content: "\2192 ";
+    color: var(--warning);
+    font-weight: 600;
+}
+
+/* ===== Email Security ===== */
+.email-sec-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.email-sec-badge {
+    padding: 0.35rem 0.85rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.email-sec-summary.positive .email-sec-badge {
+    background: rgba(34, 197, 94, 0.12);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    color: var(--success);
+}
+
+.email-sec-summary.warning .email-sec-badge {
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: var(--warning);
+}
+
+.email-sec-summary.negative .email-sec-badge {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: var(--danger);
+}
+
+.email-sec-records {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.email-sec-record {
+    padding: 1rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.email-sec-record.found {
+    border-left: 3px solid var(--success);
+}
+
+.email-sec-record.missing {
+    border-left: 3px solid var(--danger);
+}
+
+.email-sec-record-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.email-sec-type {
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
+.email-sec-status {
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-radius: 10px;
+}
+
+.email-sec-status.found {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--success);
+}
+
+.email-sec-status.missing {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--danger);
+}
+
+.email-sec-raw {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.8rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin-bottom: 0.5rem;
+    color: var(--text-muted);
+}
+
+.email-sec-details {
+    list-style: none;
+}
+
+.email-sec-details li {
+    font-size: 0.85rem;
+    padding: 0.2rem 0;
+    color: var(--text-muted);
+}
+
+.email-sec-details li::before {
+    content: "\2022 ";
+    color: var(--accent);
+}
+
+/* ===== History management ===== */
+.history-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 1rem;
+}
+
+.btn-clear-history {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    color: var(--danger);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.btn-clear-history:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.5);
+}
+
+.history-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: border-color 0.2s;
+    animation: fadeIn 0.3s ease;
+}
+
+.history-item:hover {
+    border-color: rgba(63, 45, 45, 0.9);
+}
+
+.history-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.history-item-url {
+    font-weight: 600;
+    font-size: 0.95rem;
+    word-break: break-all;
+}
+
+.history-item-meta {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.2rem;
+}
+
+.history-item-actions {
+    display: flex;
+    gap: 0.5rem;
     flex-shrink: 0;
 }
 

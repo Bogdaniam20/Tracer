@@ -112,3 +112,20 @@ def add_scan_to_history(url: str, ip_address: str = "") -> None:
 
 def get_scan_history(limit: int = 50) -> list[dict]:
     return _read_history()[:limit]
+
+
+def delete_history_entry(index: int) -> bool:
+    _ensure_history_file()
+    with FileLock(HISTORY_LOCK, timeout=10):
+        history = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
+        if index < 0 or index >= len(history):
+            return False
+        history.pop(index)
+        HISTORY_FILE.write_text(json.dumps(history, ensure_ascii=False, indent=2), encoding="utf-8")
+    return True
+
+
+def clear_history() -> None:
+    _ensure_history_file()
+    with FileLock(HISTORY_LOCK, timeout=10):
+        HISTORY_FILE.write_text("[]", encoding="utf-8")

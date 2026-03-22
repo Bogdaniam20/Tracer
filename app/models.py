@@ -67,6 +67,7 @@ class SecurityScore(BaseModel):
     max_score: int = 100
     grade: str = "F"
     details: list[str] = []
+    recommendations: list[str] = []
 
 
 class TechInfo(BaseModel):
@@ -180,6 +181,21 @@ class PageVolumeInfo(BaseModel):
     items: list[PageVolumeItem] = []
 
 
+class EmailSecurityRecord(BaseModel):
+    type: str  # SPF, DMARC, DKIM
+    found: bool = False
+    raw: str = ""
+    details: list[str] = []
+
+
+class EmailSecurityInfo(BaseModel):
+    spf: Optional[EmailSecurityRecord] = None
+    dmarc: Optional[EmailSecurityRecord] = None
+    dkim_selector_hint: str = ""
+    summary: list[str] = []
+    score: str = ""  # good / warning / bad
+
+
 class AnalysisResult(BaseModel):
     url: str
     ip_address: str = ""
@@ -198,5 +214,6 @@ class AnalysisResult(BaseModel):
     site_meta: Optional[SiteMetaInfo] = None
     geo: Optional[GeoInfo] = None
     page_volume: Optional[PageVolumeInfo] = None
+    email_security: Optional[EmailSecurityInfo] = None
     screenshot: Optional[str] = None  # base64 PNG
     error: str = ""

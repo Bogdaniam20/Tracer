@@ -23,6 +23,8 @@ from app.models import (
     CookieInfo,
     CookiesInfo,
     DnsInfo,
+    EmailSecurityInfo,
+    EmailSecurityRecord,
     GeoInfo,
     HttpHeadersInfo,
     PageVolumeInfo,
@@ -274,6 +276,7 @@ def calculate_security_score(
 ) -> SecurityScore:
     score = 0
     details: list[str] = []
+    recommendations: list[str] = []
     max_score = 100
 
     if url.startswith("https://"):
@@ -281,36 +284,47 @@ def calculate_security_score(
         details.append("[+10] HTTPS включён")
     else:
         details.append("[  0] HTTPS не используется")
+        recommendations.append("Настройте HTTPS с помощью бесплатного сертификата Let's Encrypt")
 
     if ssl_info and ssl_info.is_valid:
         score += 10
         details.append("[+10] SSL-сертификат действителен")
         if ssl_info.days_until_expiry < 30:
             details.append(f"[!] Сертификат истекает через {ssl_info.days_until_expiry} дней")
+            recommendations.append("Обновите SSL-сертификат — он истекает менее чем через 30 дней")
     elif ssl_info:
         details.append("[  0] SSL-сертификат недействителен или отсутствует")
+        recommendations.append("Установите действующий SSL-сертификат")
 
-    checks = [
-        ("strict_transport_security", 15, "Strict-Transport-Security (HSTS)"),
-        ("content_security_policy", 15, "Content-Security-Policy (CSP)"),
-        ("x_frame_options", 10, "X-Frame-Options"),
-        ("x_content_type_options", 10, "X-Content-Type-Options"),
-        ("x_xss_protection", 5, "X-XSS-Protection"),
-        ("referrer_policy", 10, "Referrer-Policy"),
-        ("permissions_policy", 5, "Permissions-Policy"),
+    header_checks = [
+        ("strict_transport_security", 15, "Strict-Transport-Security (HSTS)",
+         "Добавьте заголовок: Strict-Transport-Security: max-age=31536000; includeSubDomains"),
+        ("content_security_policy", 15, "Content-Security-Policy (CSP)",
+         "Добавьте CSP для защиты от XSS: Content-Security-Policy: default-src 'self'"),
+        ("x_frame_options", 10, "X-Frame-Options",
+         "Добавьте заголовок: X-Frame-Options: DENY (защита от clickjacking)"),
+        ("x_content_type_options", 10, "X-Content-Type-Options",
+         "Добавьте заголовок: X-Content-Type-Options: nosniff"),
+        ("x_xss_protection", 5, "X-XSS-Protection",
+         "Добавьте заголовок: X-XSS-Protection: 1; mode=block"),
+        ("referrer_policy", 10, "Referrer-Policy",
+         "Добавьте заголовок: Referrer-Policy: strict-origin-when-cross-origin"),
+        ("permissions_policy", 5, "Permissions-Policy",
+         "Добавьте Permissions-Policy для ограничения доступа к API браузера"),
     ]
 
-    for attr, pts, name in checks:
+    for attr, pts, name, rec in header_checks:
         if getattr(headers, attr, ""):
             score += pts
             details.append(f"[+{pts:>2}] {name} настроен")
         else:
             details.append(f"[  0] {name} отсутствует")
+            recommendations.append(rec)
 
     if headers.server:
         details.append(f"[!] Сервер раскрывает версию: {headers.server}")
+        recommendations.append("Скройте версию сервера: удалите или замените заголовок Server")
 
-    # Проверка cookies
     if cookies_info and cookies_info.cookies:
         insecure_cookies = [c for c in cookies_info.cookies if not c.secure]
         no_httponly = [c for c in cookies_info.cookies if not c.httponly]
@@ -320,8 +334,10 @@ def calculate_security_score(
         else:
             if insecure_cookies:
                 details.append(f"[  0] {len(insecure_cookies)} cookie без Secure")
+                recommendations.append("Установите флаг Secure для всех cookies")
             if no_httponly:
                 details.append(f"[  0] {len(no_httponly)} cookie без HttpOnly")
+                recommendations.append("Установите флаг HttpOnly для cookies с чувствительными данными")
 
     if score >= 90:
         grade = "A+"
@@ -336,7 +352,10 @@ def calculate_security_score(
     else:
         grade = "F"
 
-    return SecurityScore(score=score, max_score=max_score, grade=grade, details=details)
+    return SecurityScore(
+        score=score, max_score=max_score, grade=grade,
+        details=details, recommendations=recommendations,
+    )
 
 
 async def detect_technologies(html: str, headers: HttpHeadersInfo) -> TechInfo:
@@ -529,6 +548,82 @@ async def analyze_geo(ip: str) -> GeoInfo:
                     info.flag_emoji = _country_code_to_flag(info.country_code)
     except Exception as e:
         logger.debug("GeoIP для %s: %s", ip, e)
+    return info
+
+
+async def analyze_email_security(hostname: str) -> EmailSecurityInfo:
+    """Проверяет SPF и DMARC записи домена."""
+    info = EmailSecurityInfo()
+    summary: list[str] = []
+    problems = 0
+
+    # SPF — ищем в TXT записях домена
+    loop = asyncio.get_event_loop()
+    txt_records = await loop.run_in_executor(None, _resolve_dns_record, hostname, "TXT")
+    spf_raw = ""
+    for rec in txt_records:
+        cleaned = rec.strip('"')
+        if cleaned.lower().startswith("v=spf1"):
+            spf_raw = cleaned
+            break
+
+    if spf_raw:
+        details = []
+        if "+all" in spf_raw:
+            details.append("RISK: +all allows any server to send email")
+            problems += 1
+        elif "~all" in spf_raw:
+            details.append("Soft fail (~all): non-matching senders marked but not rejected")
+        elif "-all" in spf_raw:
+            details.append("Strict policy (-all): non-matching senders rejected")
+        elif "?all" in spf_raw:
+            details.append("Neutral (?all): no policy enforcement")
+            problems += 1
+        info.spf = EmailSecurityRecord(type="SPF", found=True, raw=spf_raw, details=details)
+        summary.append("SPF: configured")
+    else:
+        info.spf = EmailSecurityRecord(type="SPF", found=False, details=["No SPF record found"])
+        summary.append("SPF: not found")
+        problems += 1
+
+    # DMARC — _dmarc.hostname TXT запись
+    dmarc_records = await loop.run_in_executor(
+        None, _resolve_dns_record, f"_dmarc.{hostname}", "TXT"
+    )
+    dmarc_raw = ""
+    for rec in dmarc_records:
+        cleaned = rec.strip('"')
+        if cleaned.lower().startswith("v=dmarc1"):
+            dmarc_raw = cleaned
+            break
+
+    if dmarc_raw:
+        details = []
+        lower = dmarc_raw.lower()
+        if "p=none" in lower:
+            details.append("Policy: none (monitoring only, no enforcement)")
+            problems += 1
+        elif "p=quarantine" in lower:
+            details.append("Policy: quarantine (suspicious mail goes to spam)")
+        elif "p=reject" in lower:
+            details.append("Policy: reject (unauthorized mail blocked)")
+        if "rua=" in lower:
+            details.append("Aggregate reports enabled")
+        info.dmarc = EmailSecurityRecord(type="DMARC", found=True, raw=dmarc_raw, details=details)
+        summary.append("DMARC: configured")
+    else:
+        info.dmarc = EmailSecurityRecord(type="DMARC", found=False, details=["No DMARC record found"])
+        summary.append("DMARC: not found")
+        problems += 1
+
+    if problems == 0:
+        info.score = "good"
+    elif problems <= 1:
+        info.score = "warning"
+    else:
+        info.score = "bad"
+
+    info.summary = summary
     return info
 
 
@@ -782,10 +877,11 @@ async def full_analysis(url: str) -> AnalysisResult:
         geo_task = analyze_geo(ip)
         page_volume_task = analyze_page_volume(final_url, html, len(response.content))
         screenshot_task = _capture_screenshot(final_url)
+        email_sec_task = analyze_email_security(hostname)
 
         results = await asyncio.gather(
             dns_task, ssl_task, headers_task, whois_task, ports_task, traceroute_task,
-            site_meta_task, geo_task, page_volume_task, screenshot_task,
+            site_meta_task, geo_task, page_volume_task, screenshot_task, email_sec_task,
             return_exceptions=True,
         )
 
@@ -805,6 +901,7 @@ async def full_analysis(url: str) -> AnalysisResult:
         geo_res = results[7] if not isinstance(results[7], Exception) else GeoInfo()
         page_volume_res = results[8] if not isinstance(results[8], Exception) else PageVolumeInfo()
         screenshot_res = results[9] if not isinstance(results[9], Exception) and results[9] else None
+        email_sec_res = results[10] if not isinstance(results[10], Exception) else EmailSecurityInfo()
 
         result.dns = dns_res
         result.ssl = ssl_res
@@ -827,6 +924,7 @@ async def full_analysis(url: str) -> AnalysisResult:
         result.technologies = tech_res
 
         result.security = calculate_security_score(headers_res, ssl_res, cookies_res, url)
+        result.email_security = email_sec_res
         result.screenshot = screenshot_res
 
     except httpx.RequestError as e:
