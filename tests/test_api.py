@@ -46,8 +46,9 @@ def test_delete_saved_returns_404_for_unknown(client):
     assert r.status_code == 404
 
 
+@patch("main.cache.get_cached_analysis", return_value=None)
 @patch("main.full_analysis", new_callable=AsyncMock)
-def test_analyze_endpoint(mock_analysis, client):
+def test_analyze_endpoint(mock_analysis, _mock_no_cache, client):
     """POST /api/analyze вызывает full_analysis и возвращает результат."""
     mock_analysis.return_value = {
         "url": "https://example.com",

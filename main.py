@@ -59,14 +59,30 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", template_context(request))
 
 
+@app.head("/")
+async def index_head():
+    """Render и другие прокси часто проверяют HEAD / — без этого будет 405."""
+    return Response(status_code=200)
+
+
 @app.get("/saved", response_class=HTMLResponse)
 async def saved_page(request: Request):
     return templates.TemplateResponse("saved.html", template_context(request))
 
 
+@app.head("/saved")
+async def saved_head():
+    return Response(status_code=200)
+
+
 @app.get("/history", response_class=HTMLResponse)
 async def history_page(request: Request):
     return templates.TemplateResponse("history.html", template_context(request))
+
+
+@app.head("/history")
+async def history_head():
+    return Response(status_code=200)
 
 
 @app.get("/api/set-lang")

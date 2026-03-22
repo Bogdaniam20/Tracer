@@ -1,4 +1,7 @@
-fastapi
+# Starlette 1.x + Jinja2 даёт TypeError при рендере шаблонов (unhashable dict).
+# Фиксируем FastAPI 0.115.x → Starlette < 1 (совместимо с Render/Docker).
+fastapi>=0.115.0,<0.116.0
+starlette>=0.40.0,<1.0
 uvicorn[standard]
 httpx
 filelock
@@ -13,5 +16,5 @@ pytest
 pytest-asyncio
 matplotlib
 reportlab
-playwright
+playwright==1.49.0
 redis
